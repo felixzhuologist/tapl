@@ -1,9 +1,18 @@
-open Core
+open Format
+open Lexer
+open Lexing
+open Syntax
 
 let _ =
   while true do
-    Out_channel.output_string stdout "> ";
-    Out_channel.flush stdout;
-    let input_str = In_channel.input_line In_channel.stdin in
-    fprintf stdout "TODO\n"
+    output_string stdout "> ";
+    flush stdout;
+    try
+      let input_str = input_line stdin in
+      let lexbuf = Lexing.from_string input_str in
+      let ast = Parser.main Lexer.read lexbuf in
+      print_endline (printtm ast)
+    with
+      | SyntaxError msg -> prerr_endline msg
+      | Parser.Error -> prerr_endline "Parsing error"
   done
