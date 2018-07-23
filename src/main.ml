@@ -11,7 +11,7 @@ let _ =
       let input_str = input_line stdin in
       let lexbuf = Lexing.from_string input_str in
       let ast = Parser.term Lexer.read lexbuf in
-      print_endline (printtm ast)
+      print_endline (printtm (eval ast))
     with
       | SyntaxError msg -> prerr_endline msg
       | Parser.Error -> prerr_endline "Parsing error"
