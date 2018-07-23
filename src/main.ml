@@ -10,7 +10,7 @@ let _ =
     try
       let input_str = input_line stdin in
       let lexbuf = Lexing.from_string input_str in
-      let ast = Parser.main Lexer.read lexbuf in
+      let ast = Parser.term Lexer.read lexbuf in
       print_endline (printtm ast)
     with
       | SyntaxError msg -> prerr_endline msg
