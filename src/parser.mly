@@ -2,36 +2,31 @@
 open Syntax
 %}
 
-%token TRUE
-%token FALSE
-%token ZERO
+%token <int> VAR
+%token LAMBDA
 
-%token IF
-%token THEN
-%token ELSE
-%token SUCC
-%token PRED
-%token ISZERO
-
+%token DOT
 %token LPAREN
 %token RPAREN
+%token EOF
 
-%start term
-%type <Syntax.term> term
+%start toplevel
+%type <Syntax.term> toplevel
 
 %%
+toplevel:
+  /* todo: use option */
+  | EOF                 { TmVar(0, 0) }
+  | term EOF            { $1 } ;
+
 term:
-  | appterm                      { $1 }
-  | IF term THEN term ELSE term  { TmIf($2, $4, $6) } ;
+  | AppTerm             { $1 }
+  | LAMBDA DOT term     { TmAbs($3) } ;
 
-appterm:
-  | aterm        { $1 }
-  | SUCC aterm   { TmSucc($2) }
-  | PRED aterm   { TmPred($2) }
-  | ISZERO aterm { TmIsZero($2) } ;
+AppTerm:
+  | ATerm               { $1 }
+  | AppTerm ATerm       { TmApp($1, $2) } ;
 
-aterm:
-  | LPAREN term RPAREN { $2 }
-  | ZERO               { TmZero }
-  | TRUE               { TmTrue }
-  | FALSE              { TmFalse } ;
+ATerm:
+  | LPAREN term RPAREN  { $2 }
+  | VAR                 { TmVar(0, $1) } ;
