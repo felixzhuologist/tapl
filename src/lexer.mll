@@ -18,5 +18,14 @@ rule read =
   | "."      { DOT }
   | "("      { LPAREN }
   | ")"      { RPAREN }
+  | "if"     { IF }
+  | "then"   { THEN }
+  | "else"   { ELSE }
+  | "succ"   { SUCC }
+  | "pred"   { PRED }
+  | "iszero" { ISZERO }
+  | "0"      { ZERO }
+  | "true"   { TRUE }
+  | "false"  { FALSE }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof      { EOF }
