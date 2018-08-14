@@ -2,7 +2,7 @@
 open Syntax
 %}
 
-%token <int> VAR
+%token <string> IDENT
 %token LAMBDA
 
 %token DOT
@@ -22,29 +22,34 @@ open Syntax
 %token ISZERO
 
 %start toplevel
-%type <Syntax.term> toplevel
+%type <Syntax.context -> Syntax.term> toplevel
 
 %%
 toplevel:
   /* todo: use option */
-  | EOF                 { TmVar(0, 0) }
-  | term EOF            { $1 } ;
+  | EOF                 { fun _ -> TmVar(0, 0) }
+  | term EOF            { fun ctx -> $1 ctx } ;
 
 term:
-  | AppTerm             { $1 }
-  | LAMBDA DOT term     { TmAbs($3) }
-  | IF term THEN term ELSE term { TmIf($2, $4, $6) } ;
+  | AppTerm
+    { $1 }
+  | LAMBDA IDENT DOT term 
+    { fun ctx ->
+        let ctx1 = addname ctx $2 NameBind in
+        TmAbs($2, $4 ctx1) }
+  | IF term THEN term ELSE term
+    { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) } ;
 
 AppTerm:
   | ATerm               { $1 }
-  | AppTerm ATerm       { TmApp($1, $2) }
-  | SUCC ATerm          { TmSucc($2) }
-  | PRED ATerm          { TmPred($2) }
-  | ISZERO ATerm        { TmIsZero($2) } ;
+  | AppTerm ATerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
+  | SUCC ATerm          { fun ctx -> TmSucc($2 ctx) }
+  | PRED ATerm          { fun ctx -> TmPred($2 ctx) }
+  | ISZERO ATerm        { fun ctx -> TmIsZero($2 ctx) } ;
 
 ATerm:
-  | LPAREN term RPAREN  { $2 }
-  | VAR                 { TmVar(0, $1) }
-  | ZERO                { TmZero }
-  | TRUE                { TmTrue }
-  | FALSE               { TmFalse } ;
+  | LPAREN term RPAREN    { $2 }
+  | IDENT                 { fun ctx -> TmVar(name2index ctx $1, ctxlength ctx) }
+  | ZERO                  { fun _ -> TmZero }
+  | TRUE                  { fun _ -> TmTrue }
+  | FALSE                 { fun _ -> TmFalse } ;

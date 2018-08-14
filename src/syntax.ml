@@ -1,6 +1,6 @@
 type term = 
   | TmVar of int * int
-  | TmAbs of term
+  | TmAbs of string * term
   | TmApp of term * term
   | TmTrue
   | TmFalse
@@ -12,7 +12,26 @@ type term =
 
 type binding = NameBind
 
+exception LookupFailure
+
 type context = (string * binding) list
+
+let emptycontext = []
+
+let ctxlength ctx = List.length ctx
+
+let addname ctx name bind = (name, bind) :: ctx
+
+let index2name ctx x =
+  try
+    let (xn, _) = List.nth ctx x in xn
+  with Failure _ ->
+    raise LookupFailure
+
+let rec name2index ctx x =
+  match ctx with
+    | [] -> raise LookupFailure
+    | (y,_)::rest -> if y=x then 0 else 1 + (name2index rest x)
 
 let rec isnumericval t = match t with
   | TmZero -> true
@@ -29,7 +48,7 @@ let termShift d t =
     | TmPred(t1) -> TmPred(walk c t1)
     | TmIsZero(t1) -> TmIsZero(walk c t1)
     | TmVar(x, n) -> if x >= c then TmVar(x + d, n + d) else TmVar(x, n + d)
-    | TmAbs(t) -> TmAbs(walk (c + 1) t)
+    | TmAbs(x, t) -> TmAbs(x, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
   in walk 0 t
 
@@ -44,7 +63,7 @@ let termSubst j s t =
     | TmPred(t1) -> TmPred(walk c t1)
     | TmIsZero(t1) -> TmIsZero(walk c t1)
     | TmVar(x, n) -> if x = j + c then termShift c s else TmVar(x, n)
-    | TmAbs(t) -> TmAbs(walk (c + 1) t)
+    | TmAbs(x, t) -> TmAbs(x, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
   in walk 0 t
 
@@ -54,14 +73,15 @@ let isval t = match t with
   | TmTrue -> true
   | TmFalse -> true
   | t when isnumericval t -> true
-  | TmAbs(_) -> true
+  | TmAbs(_, _) -> true
   | _ -> false
 
 exception NoRuleApplies
 
 let rec printtm t = match t with
   | TmVar(_,i) -> string_of_int i
-  | TmAbs(t) -> "λ." ^ printtm t
+  (* | TmAbs(x, t) -> let (ctx', x') = *)
+  | TmAbs(x, t) -> ("λ." ^ printtm t)
   | TmApp(t1, t2) -> printtm t1 ^ " " ^ printtm t2
   | TmIf(_, _, _) -> "ifelse"
   | TmSucc(t) -> "succ " ^ printtm t
@@ -82,7 +102,7 @@ let rec evalStep t = match t with
   | TmIsZero(TmZero) -> TmTrue
   | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
   | TmIsZero(t1) -> let t1' = evalStep t1 in TmIsZero(t1')
-  | TmApp(TmAbs(t),v2) when isval v2 -> termSubstTop v2 t
+  | TmApp(TmAbs(x, t), v2) when isval v2 -> termSubstTop v2 t
   | TmApp(v1, t2) when isval v1 -> let t2' = evalStep t2 in TmApp(v1, t2')
   | TmApp(t1, t2) -> let t1' = evalStep t1 in TmApp(t1', t2)
   | _ -> raise NoRuleApplies
