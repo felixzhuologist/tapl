@@ -13,10 +13,14 @@ rule read =
   parse
   | white    { read lexbuf }
   | "lambda" { LAMBDA }
+  | "Bool"   { BOOL }
+  | "Nat"    { NAT }
   | "λ"      { LAMBDA }
+  | "->"     { ARROW }
   | "."      { DOT }
   | "("      { LPAREN }
   | ")"      { RPAREN }
+  | ":"      { COLON }
   | "if"     { IF }
   | "then"   { THEN }
   | "else"   { ELSE }

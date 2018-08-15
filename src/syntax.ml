@@ -1,6 +1,11 @@
+type ty =
+  | TyBool
+  | TyNat
+  | TyArr of ty * ty
+
 type term = 
   | TmVar of int * int
-  | TmAbs of string * term
+  | TmAbs of string * ty * term
   | TmApp of term * term
   | TmTrue
   | TmFalse
@@ -10,7 +15,9 @@ type term =
   | TmPred of term
   | TmIsZero of term
 
-type binding = NameBind
+type binding =
+  | NameBind
+  | VarBind of ty
 
 exception LookupFailure
 
@@ -57,7 +64,7 @@ let termShift d t =
     | TmPred(t1) -> TmPred(walk c t1)
     | TmIsZero(t1) -> TmIsZero(walk c t1)
     | TmVar(x, n) -> if x >= c then TmVar(x + d, n + d) else TmVar(x, n + d)
-    | TmAbs(x, t) -> TmAbs(x, walk (c + 1) t)
+    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
   in walk 0 t
 
@@ -72,7 +79,7 @@ let termSubst j s t =
     | TmPred(t1) -> TmPred(walk c t1)
     | TmIsZero(t1) -> TmIsZero(walk c t1)
     | TmVar(x, n) -> if x = j + c then termShift c s else TmVar(x, n)
-    | TmAbs(x, t) -> TmAbs(x, walk (c + 1) t)
+    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
   in walk 0 t
 
@@ -82,7 +89,7 @@ let isval t = match t with
   | TmTrue -> true
   | TmFalse -> true
   | t when isnumericval t -> true
-  | TmAbs(_, _) -> true
+  | TmAbs(_, _, _) -> true
   | _ -> false
 
 exception NoRuleApplies
@@ -93,7 +100,7 @@ let rec printtm (ctx: context) (t: term) = match t with
         index2name ctx i
       else
         "bad index"
-  | TmAbs(x, t) ->
+  | TmAbs(x, _, t) ->
       let ctx', x' = pickfreshname ctx x in
       ("λ" ^ x' ^ "." ^ printtm ctx' t)
   | TmApp(t1, t2) -> printtm ctx t1 ^ " " ^ printtm ctx t2
@@ -119,7 +126,7 @@ let rec evalStep t = match t with
   | TmIsZero(TmZero) -> TmTrue
   | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
   | TmIsZero(t1) -> let t1' = evalStep t1 in TmIsZero(t1')
-  | TmApp(TmAbs(_, t), v2) when isval v2 -> termSubstTop v2 t
+  | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
   | TmApp(v1, t2) when isval v1 -> let t2' = evalStep t2 in TmApp(v1, t2')
   | TmApp(t1, t2) -> let t1' = evalStep t1 in TmApp(t1', t2)
   | _ -> raise NoRuleApplies
