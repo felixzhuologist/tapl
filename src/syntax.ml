@@ -22,13 +22,22 @@ let ctxlength ctx = List.length ctx
 
 let addname ctx name bind = (name, bind) :: ctx
 
+let rec isnamebound ctx name =
+  match ctx with
+  | [] -> false 
+  | (x,_)::rest -> if x=name then true else isnamebound rest name
+
+let rec pickfreshname ctx x =
+  if isnamebound ctx x then pickfreshname ctx (x^"'")
+  else ((x,NameBind)::ctx), x
+
 let index2name ctx x =
   try
     let (xn, _) = List.nth ctx x in xn
   with Failure _ ->
     raise LookupFailure
 
-let rec name2index ctx x =
+let rec name2index (ctx: context) (x: string) =
   match ctx with
     | [] -> raise LookupFailure
     | (y,_)::rest -> if y=x then 0 else 1 + (name2index rest x)
@@ -78,15 +87,23 @@ let isval t = match t with
 
 exception NoRuleApplies
 
-let rec printtm t = match t with
-  | TmVar(_,i) -> string_of_int i
-  (* | TmAbs(x, t) -> let (ctx', x') = *)
-  | TmAbs(x, t) -> ("λ." ^ printtm t)
-  | TmApp(t1, t2) -> printtm t1 ^ " " ^ printtm t2
-  | TmIf(_, _, _) -> "ifelse"
-  | TmSucc(t) -> "succ " ^ printtm t
-  | TmPred(t) -> "pred " ^ printtm t
-  | TmIsZero(t) -> "iszero " ^ printtm t
+let rec printtm (ctx: context) (t: term) = match t with
+  | TmVar(i, n) ->
+      if ctxlength ctx = n then
+        index2name ctx i
+      else
+        "bad index"
+  | TmAbs(x, t) ->
+      let ctx', x' = pickfreshname ctx x in
+      ("λ" ^ x' ^ "." ^ printtm ctx' t)
+  | TmApp(t1, t2) -> printtm ctx t1 ^ " " ^ printtm ctx t2
+  | TmIf(t1, t2, t3) -> 
+      "if " ^ printtm ctx t1 ^
+      " then " ^ printtm ctx t2 ^
+      " else " ^ printtm ctx t3
+  | TmSucc(t) -> "succ " ^ printtm ctx t
+  | TmPred(t) -> "pred " ^ printtm ctx t
+  | TmIsZero(t) -> "iszero " ^ printtm ctx t
   | TmTrue -> "true"
   | TmFalse -> "false"
   | TmZero -> "0"
@@ -102,7 +119,7 @@ let rec evalStep t = match t with
   | TmIsZero(TmZero) -> TmTrue
   | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
   | TmIsZero(t1) -> let t1' = evalStep t1 in TmIsZero(t1')
-  | TmApp(TmAbs(x, t), v2) when isval v2 -> termSubstTop v2 t
+  | TmApp(TmAbs(_, t), v2) when isval v2 -> termSubstTop v2 t
   | TmApp(v1, t2) when isval v1 -> let t2' = evalStep t2 in TmApp(v1, t2')
   | TmApp(t1, t2) -> let t1' = evalStep t1 in TmApp(t1', t2)
   | _ -> raise NoRuleApplies

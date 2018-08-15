@@ -27,7 +27,7 @@ open Syntax
 %%
 toplevel:
   /* todo: use option */
-  | EOF                 { fun _ -> TmVar(0, 0) }
+  | EOF                 { fun _ -> TmFalse }
   | term EOF            { fun ctx -> $1 ctx } ;
 
 term:
