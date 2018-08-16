@@ -133,26 +133,26 @@ let rec printtm (ctx: context) (t: term) = match t with
     printtm ctx t1 ^ " in " ^
     printtm ctx t2
 
-let rec evalStep t = match t with
+let rec evalStep ctx t = match t with
   | TmIf(TmTrue, t2, _) -> t2
   | TmIf(TmFalse, _, t3) -> t3
-  | TmIf(t1, t2, t3) -> let t1' = evalStep t1 in TmIf(t1', t2, t3)
-  | TmSucc(t1) -> let t1' = evalStep t1 in TmSucc(t1')
+  | TmIf(t1, t2, t3) -> let t1' = evalStep ctx t1 in TmIf(t1', t2, t3)
+  | TmSucc(t1) -> let t1' = evalStep ctx t1 in TmSucc(t1')
   | TmPred(TmZero) -> TmZero
   | TmPred(TmSucc(nv1)) when (isnumericval nv1) -> nv1
-  | TmPred(t1) -> let t1' = evalStep t1 in TmPred(t1')
+  | TmPred(t1) -> let t1' = evalStep ctx t1 in TmPred(t1')
   | TmIsZero(TmZero) -> TmTrue
   | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
-  | TmIsZero(t1) -> let t1' = evalStep t1 in TmIsZero(t1')
+  | TmIsZero(t1) -> let t1' = evalStep ctx t1 in TmIsZero(t1')
   | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
-  | TmApp(v1, t2) when isval v1 -> let t2' = evalStep t2 in TmApp(v1, t2')
-  | TmApp(t1, t2) -> let t1' = evalStep t1 in TmApp(t1', t2)
-  (* | TmLet(n, t1, t2) -> let t1' = evalStep t1 in TmLet(n, t1', t2) *)
+  | TmApp(v1, t2) when isval v1 -> let t2' = evalStep ctx t2 in TmApp(v1, t2')
+  | TmApp(t1, t2) -> let t1' = evalStep ctx t1 in TmApp(t1', t2)
+  (* | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2) *)
   | _ -> raise NoRuleApplies
 
-let rec eval t =
-  try let t' = evalStep t
-    in eval t'
+let rec eval ctx t =
+  try let t' = evalStep ctx t
+    in eval ctx t'
   with NoRuleApplies -> t
 
 exception TypeError

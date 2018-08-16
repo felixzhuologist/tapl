@@ -11,7 +11,7 @@ let _ =
       let input_str = input_line stdin in
       let lexbuf = Lexing.from_string input_str in
       let ast = (Parser.toplevel Lexer.read lexbuf) emptycontext in
-      let result = eval ast in
+      let result = eval emptycontext ast in
       let ty = typeof emptycontext ast in
       print_endline ((printtm emptycontext result) ^ " : " ^ (printty ty))
     with
