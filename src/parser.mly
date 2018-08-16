@@ -21,10 +21,13 @@ open Syntax
 %token PRED
 %token ISZERO
 
-%token BOOL
-%token NAT
+%token TYBOOL
+%token TYNAT
 %token ARROW
 %token COLON
+
+%token UNIT
+%token TYUNIT
 
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
@@ -61,13 +64,15 @@ ATerm:
           | n -> TmSucc(f (n - 1))
         in fun _ -> f $1 }
   | TRUE                  { fun _ -> TmTrue }
-  | FALSE                 { fun _ -> TmFalse } ;
+  | FALSE                 { fun _ -> TmFalse }
+  | UNIT                  { fun _ -> TmUnit } ;
 
 Type:
   | AType            { $1 }
   | AType ARROW Type { TyArr($1, $3) } ;
 
 AType:
-  | LPAREN Type RPAREN { $2 }
-  | BOOL               { TyBool }
-  | NAT                { TyNat } ;
+  | LPAREN Type RPAREN   { $2 }
+  | TYUNIT               { TyUnit }
+  | TYBOOL               { TyBool }
+  | TYNAT                { TyNat } ;

@@ -1,6 +1,7 @@
 type ty =
   | TyBool
   | TyNat
+  | TyUnit
   | TyArr of ty * ty
 
 type term = 
@@ -14,6 +15,7 @@ type term =
   | TmSucc of term
   | TmPred of term
   | TmIsZero of term
+  | TmUnit
 
 type binding =
   | NameBind
@@ -59,6 +61,7 @@ let termShift d t =
     | TmTrue -> TmTrue
     | TmFalse -> TmFalse
     | TmZero -> TmZero
+    | TmUnit -> TmUnit
     | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
     | TmSucc(t1) -> TmSucc(walk c t1)
     | TmPred(t1) -> TmPred(walk c t1)
@@ -74,6 +77,7 @@ let termSubst j s t =
     | TmTrue -> TmTrue
     | TmFalse -> TmFalse
     | TmZero -> TmZero
+    | TmUnit -> TmUnit
     | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
     | TmSucc(t1) -> TmSucc(walk c t1)
     | TmPred(t1) -> TmPred(walk c t1)
@@ -88,6 +92,7 @@ let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
 let isval t = match t with
   | TmTrue -> true
   | TmFalse -> true
+  | TmUnit -> true
   | t when isnumericval t -> true
   | TmAbs(_, _, _) -> true
   | _ -> false
@@ -119,6 +124,7 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmTrue -> "true"
   | TmFalse -> "false"
   | TmZero -> "0"
+  | TmUnit -> "unit"
 
 let rec evalStep t = match t with
   | TmIf(TmTrue, t2, _) -> t2
@@ -147,6 +153,7 @@ let rec typeof (ctx: context) (t: term) = match t with
   | TmTrue -> TyBool
   | TmFalse -> TyBool
   | TmZero -> TyNat
+  | TmUnit -> TyUnit
   | TmPred(t1) when ((=) (typeof ctx t1) TyNat) -> TyNat
   | TmSucc(t1) when ((=) (typeof ctx t1) TyNat) -> TyNat
   | TmIsZero(t1) when ((=) (typeof ctx t1) TyNat) -> TyBool
@@ -172,4 +179,5 @@ let rec typeof (ctx: context) (t: term) = match t with
 let rec printty ty = match ty with
   | TyBool -> "Bool"
   | TyNat -> "Nat"
+  | TyUnit -> "Unit"
   | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2

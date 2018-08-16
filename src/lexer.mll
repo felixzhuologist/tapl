@@ -14,9 +14,11 @@ let intv = ['0'-'9']+
 rule read =
   parse
   | white    { read lexbuf }
+  | "unit"   { UNIT }
   | "lambda" { LAMBDA }
-  | "Bool"   { BOOL }
-  | "Nat"    { NAT }
+  | "Bool"   { TYBOOL }
+  | "Nat"    { TYNAT }
+  | "Unit"   { TYUNIT }
   | "λ"      { LAMBDA }
   | "->"     { ARROW }
   | "."      { DOT }
