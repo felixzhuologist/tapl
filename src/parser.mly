@@ -12,7 +12,7 @@ open Syntax
 
 %token TRUE
 %token FALSE
-%token ZERO
+%token <int> INTV
 
 %token IF
 %token THEN
@@ -55,7 +55,11 @@ AppTerm:
 ATerm:
   | LPAREN term RPAREN    { $2 }
   | IDENT                 { fun ctx -> TmVar(name2index ctx $1, ctxlength ctx) }
-  | ZERO                  { fun _ -> TmZero }
+  | INTV
+    { let rec f n = match n with
+          | 0 -> TmZero
+          | n -> TmSucc(f (n - 1))
+        in fun _ -> f $1 }
   | TRUE                  { fun _ -> TmTrue }
   | FALSE                 { fun _ -> TmFalse } ;
 

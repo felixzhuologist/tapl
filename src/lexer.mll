@@ -9,6 +9,8 @@ let white = [' ' '\t']+
 
 let ident = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
 
+let intv = ['0'-'9']+
+
 rule read =
   parse
   | white    { read lexbuf }
@@ -27,9 +29,9 @@ rule read =
   | "succ"   { SUCC }
   | "pred"   { PRED }
   | "iszero" { ISZERO }
-  | "0"      { ZERO }
   | "true"   { TRUE }
   | "false"  { FALSE }
   | ident    { IDENT (Lexing.lexeme lexbuf) }
+  | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
   | eof      { EOF }

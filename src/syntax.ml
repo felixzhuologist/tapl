@@ -108,7 +108,12 @@ let rec printtm (ctx: context) (t: term) = match t with
       "if " ^ printtm ctx t1 ^
       " then " ^ printtm ctx t2 ^
       " else " ^ printtm ctx t3
-  | TmSucc(t) -> "succ " ^ printtm ctx t
+  | TmSucc(t) ->
+      let rec f n t = match t with
+        | TmZero -> string_of_int n
+        | TmSucc(s) -> f (n + 1) s
+        | _ -> "succ " ^ printtm ctx t
+      in f 1 t 
   | TmPred(t) -> "pred " ^ printtm ctx t
   | TmIsZero(t) -> "iszero " ^ printtm ctx t
   | TmTrue -> "true"
