@@ -31,6 +31,10 @@ open Syntax
 %token SEMICOLON
 %token AS
 
+%token LET
+%token EQ
+%token IN
+
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
 
@@ -59,7 +63,8 @@ term:
   | term AS Type
     { fun ctx ->
         let ctx1 = addbinding ctx "id" NameBind in
-        TmApp(TmAbs("id", $3, $1 ctx1), $1 ctx) } ;
+        TmApp(TmAbs("id", $3, $1 ctx1), $1 ctx) }
+  | LET IDENT EQ term IN term { fun ctx -> TmLet($2, $4 ctx, $6 ctx) };
 
 AppTerm:
   | ATerm               { $1 }

@@ -16,6 +16,7 @@ type term =
   | TmPred of term
   | TmIsZero of term
   | TmUnit
+  | TmLet of string * term * term
 
 type binding =
   | NameBind
@@ -69,6 +70,7 @@ let termShift d t =
     | TmVar(x, n) -> if x >= c then TmVar(x + d, n + d) else TmVar(x, n + d)
     | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
+    | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2) 
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -85,6 +87,7 @@ let termSubst j s t =
     | TmVar(x, n) -> if x = j + c then termShift c s else TmVar(x, n)
     | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
+    | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -125,6 +128,10 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmFalse -> "false"
   | TmZero -> "0"
   | TmUnit -> "unit"
+  | TmLet(n, t1, t2) ->
+    "let " ^ n ^ "=" ^
+    printtm ctx t1 ^ " in " ^
+    printtm ctx t2
 
 let rec evalStep t = match t with
   | TmIf(TmTrue, t2, _) -> t2
@@ -140,6 +147,7 @@ let rec evalStep t = match t with
   | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
   | TmApp(v1, t2) when isval v1 -> let t2' = evalStep t2 in TmApp(v1, t2')
   | TmApp(t1, t2) -> let t1' = evalStep t1 in TmApp(t1', t2)
+  (* | TmLet(n, t1, t2) -> let t1' = evalStep t1 in TmLet(n, t1', t2) *)
   | _ -> raise NoRuleApplies
 
 let rec eval t =
@@ -174,6 +182,7 @@ let rec typeof (ctx: context) (t: term) = match t with
       (match ty1 with
         | TyArr(ty11, ty12) -> if (=) ty11 ty2 then ty12 else (raise TypeError)
         | _ -> raise TypeError)
+  | TmLet(_, _, _) -> TyUnit
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
