@@ -40,7 +40,7 @@ term:
     { $1 }
   | LAMBDA IDENT COLON Type DOT term 
     { fun ctx ->
-        let ctx1 = addname ctx $2 NameBind in
+        let ctx1 = addbinding ctx $2 NameBind in
         TmAbs($2, $4, $6 ctx1) }
   | IF term THEN term ELSE term
     { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) } ;

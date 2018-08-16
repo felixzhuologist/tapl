@@ -11,7 +11,9 @@ let _ =
       let input_str = input_line stdin in
       let lexbuf = Lexing.from_string input_str in
       let ast = (Parser.toplevel Lexer.read lexbuf) emptycontext in
-      print_endline (printtm emptycontext (eval ast))
+      let result = eval ast in
+      let ty = typeof emptycontext result in
+      print_endline ((printtm emptycontext result) ^ " : " ^ (printty ty))
     with
       | SyntaxError msg -> prerr_endline msg
       | Parser.Error -> prerr_endline "Parsing error"
