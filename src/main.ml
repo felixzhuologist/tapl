@@ -12,7 +12,7 @@ let _ =
       let lexbuf = Lexing.from_string input_str in
       let ast = (Parser.toplevel Lexer.read lexbuf) emptycontext in
       let result = eval ast in
-      let ty = typeof emptycontext result in
+      let ty = typeof emptycontext ast in
       print_endline ((printtm emptycontext result) ^ " : " ^ (printty ty))
     with
       | SyntaxError msg -> prerr_endline msg
