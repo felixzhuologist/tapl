@@ -25,6 +25,7 @@ rule read =
   | "("      { LPAREN }
   | ")"      { RPAREN }
   | ":"      { COLON }
+  | ";"      { SEMICOLON }
   | "if"     { IF }
   | "then"   { THEN }
   | "else"   { ELSE }

@@ -28,6 +28,7 @@ open Syntax
 
 %token UNIT
 %token TYUNIT
+%token SEMICOLON
 
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
@@ -46,7 +47,11 @@ term:
         let ctx1 = addbinding ctx $2 NameBind in
         TmAbs($2, $4, $6 ctx1) }
   | IF term THEN term ELSE term
-    { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) } ;
+    { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) } 
+  | term SEMICOLON term
+    { fun ctx ->
+        let ctx1 = addbinding ctx "_" NameBind in
+        TmApp(TmAbs("_", TyUnit, $3 ctx1), $1 ctx) } ;
 
 AppTerm:
   | ATerm               { $1 }
