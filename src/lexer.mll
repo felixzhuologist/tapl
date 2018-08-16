@@ -34,6 +34,7 @@ rule read =
   | "iszero" { ISZERO }
   | "true"   { TRUE }
   | "false"  { FALSE }
+  | "as"     { AS }
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }

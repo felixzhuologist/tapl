@@ -17,4 +17,5 @@ let _ =
     with
       | SyntaxError msg -> prerr_endline msg
       | Parser.Error -> prerr_endline "Parsing error"
+      | Syntax.TypeError -> prerr_endline "Type error"
   done

@@ -29,6 +29,7 @@ open Syntax
 %token UNIT
 %token TYUNIT
 %token SEMICOLON
+%token AS
 
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
@@ -47,11 +48,18 @@ term:
         let ctx1 = addbinding ctx $2 NameBind in
         TmAbs($2, $4, $6 ctx1) }
   | IF term THEN term ELSE term
-    { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) } 
+    { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) }
+  (* NOTE: using derived forms currently means that the derived form will 
+   * show up in cases where a term doesn't get evaluated (e.g. the body of a
+   * function: lambda x: Nat . (x as Nat) will eval to λx.λid.x x : Nat -> Nat) *)
   | term SEMICOLON term
     { fun ctx ->
         let ctx1 = addbinding ctx "_" NameBind in
-        TmApp(TmAbs("_", TyUnit, $3 ctx1), $1 ctx) } ;
+        TmApp(TmAbs("_", TyUnit, $3 ctx1), $1 ctx) }
+  | term AS Type
+    { fun ctx ->
+        let ctx1 = addbinding ctx "id" NameBind in
+        TmApp(TmAbs("id", $3, $1 ctx1), $1 ctx) } ;
 
 AppTerm:
   | ATerm               { $1 }
