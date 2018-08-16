@@ -64,7 +64,10 @@ term:
     { fun ctx ->
         let ctx1 = addbinding ctx "id" NameBind in
         TmApp(TmAbs("id", $3, $1 ctx1), $1 ctx) }
-  | LET IDENT EQ term IN term { fun ctx -> TmLet($2, $4 ctx, $6 ctx) };
+  | LET IDENT EQ term IN term
+    { fun ctx ->
+        let ctx1 = addbinding ctx $2 NameBind in
+        TmLet($2, $4 ctx, $6 ctx1) };
 
 AppTerm:
   | ATerm               { $1 }

@@ -131,7 +131,7 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmLet(n, t1, t2) ->
     "let " ^ n ^ "=" ^
     printtm ctx t1 ^ " in " ^
-    printtm ctx t2
+    printtm (addbinding ctx n NameBind) t2
 
 let rec evalStep ctx t = match t with
   | TmIf(TmTrue, t2, _) -> t2
@@ -147,7 +147,8 @@ let rec evalStep ctx t = match t with
   | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
   | TmApp(v1, t2) when isval v1 -> let t2' = evalStep ctx t2 in TmApp(v1, t2')
   | TmApp(t1, t2) -> let t1' = evalStep ctx t1 in TmApp(t1', t2)
-  (* | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2) *)
+  | TmLet(n, v1, t2) when isval v1 -> termSubstTop v1 t2
+  | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2)
   | _ -> raise NoRuleApplies
 
 let rec eval ctx t =
@@ -182,7 +183,10 @@ let rec typeof (ctx: context) (t: term) = match t with
       (match ty1 with
         | TyArr(ty11, ty12) -> if (=) ty11 ty2 then ty12 else (raise TypeError)
         | _ -> raise TypeError)
-  | TmLet(_, _, _) -> TyUnit
+  | TmLet(x, t1, t2) ->
+      let ty1 = typeof ctx t1 in
+      let ctx' = addbinding ctx x (VarBind(ty1)) in
+      typeof ctx' t2
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
