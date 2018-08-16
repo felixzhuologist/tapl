@@ -8,6 +8,9 @@ open Syntax
 %token DOT
 %token LPAREN
 %token RPAREN
+%token LCURLY
+%token RCURLY
+%token COMMA
 %token EOF
 
 %token TRUE
@@ -67,7 +70,8 @@ term:
   | LET IDENT EQ term IN term
     { fun ctx ->
         let ctx1 = addbinding ctx $2 NameBind in
-        TmLet($2, $4 ctx, $6 ctx1) };
+        TmLet($2, $4 ctx, $6 ctx1) }
+  | LCURLY term COMMA term RCURLY { fun ctx -> TmPair($2 ctx, $4 ctx) };
 
 AppTerm:
   | ATerm               { $1 }

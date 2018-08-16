@@ -22,8 +22,11 @@ rule read =
   | "λ"      { LAMBDA }
   | "->"     { ARROW }
   | "."      { DOT }
+  | ","      { COMMA }
   | "("      { LPAREN }
   | ")"      { RPAREN }
+  | "{"      { LCURLY }
+  | "}"      { RCURLY }
   | ":"      { COLON }
   | ";"      { SEMICOLON }
   | "if"     { IF }
