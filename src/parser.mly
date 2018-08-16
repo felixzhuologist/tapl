@@ -21,6 +21,11 @@ open Syntax
 %token PRED
 %token ISZERO
 
+%token BOOL
+%token NAT
+%token ARROW
+%token COLON
+
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
 
@@ -33,10 +38,10 @@ toplevel:
 term:
   | AppTerm
     { $1 }
-  | LAMBDA IDENT DOT term 
+  | LAMBDA IDENT COLON Type DOT term 
     { fun ctx ->
-        let ctx1 = addname ctx $2 NameBind in
-        TmAbs($2, $4 ctx1) }
+        let ctx1 = addbinding ctx $2 NameBind in
+        TmAbs($2, $4, $6 ctx1) }
   | IF term THEN term ELSE term
     { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) } ;
 
@@ -53,3 +58,12 @@ ATerm:
   | ZERO                  { fun _ -> TmZero }
   | TRUE                  { fun _ -> TmTrue }
   | FALSE                 { fun _ -> TmFalse } ;
+
+Type:
+  | AType            { $1 }
+  | AType ARROW Type { TyArr($1, $3) } ;
+
+AType:
+  | LPAREN Type RPAREN { $2 }
+  | BOOL               { TyBool }
+  | NAT                { TyNat } ;

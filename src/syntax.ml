@@ -1,6 +1,11 @@
+type ty =
+  | TyBool
+  | TyNat
+  | TyArr of ty * ty
+
 type term = 
   | TmVar of int * int
-  | TmAbs of string * term
+  | TmAbs of string * ty * term
   | TmApp of term * term
   | TmTrue
   | TmFalse
@@ -10,7 +15,9 @@ type term =
   | TmPred of term
   | TmIsZero of term
 
-type binding = NameBind
+type binding =
+  | NameBind
+  | VarBind of ty
 
 exception LookupFailure
 
@@ -20,7 +27,7 @@ let emptycontext = []
 
 let ctxlength ctx = List.length ctx
 
-let addname ctx name bind = (name, bind) :: ctx
+let addbinding ctx name bind = (name, bind) :: ctx
 
 let rec isnamebound ctx name =
   match ctx with
@@ -31,9 +38,9 @@ let rec pickfreshname ctx x =
   if isnamebound ctx x then pickfreshname ctx (x^"'")
   else ((x,NameBind)::ctx), x
 
-let index2name ctx x =
+let getbinding ctx x =
   try
-    let (xn, _) = List.nth ctx x in xn
+    List.nth ctx x
   with Failure _ ->
     raise LookupFailure
 
@@ -57,7 +64,7 @@ let termShift d t =
     | TmPred(t1) -> TmPred(walk c t1)
     | TmIsZero(t1) -> TmIsZero(walk c t1)
     | TmVar(x, n) -> if x >= c then TmVar(x + d, n + d) else TmVar(x, n + d)
-    | TmAbs(x, t) -> TmAbs(x, walk (c + 1) t)
+    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
   in walk 0 t
 
@@ -72,7 +79,7 @@ let termSubst j s t =
     | TmPred(t1) -> TmPred(walk c t1)
     | TmIsZero(t1) -> TmIsZero(walk c t1)
     | TmVar(x, n) -> if x = j + c then termShift c s else TmVar(x, n)
-    | TmAbs(x, t) -> TmAbs(x, walk (c + 1) t)
+    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
   in walk 0 t
 
@@ -82,7 +89,7 @@ let isval t = match t with
   | TmTrue -> true
   | TmFalse -> true
   | t when isnumericval t -> true
-  | TmAbs(_, _) -> true
+  | TmAbs(_, _, _) -> true
   | _ -> false
 
 exception NoRuleApplies
@@ -90,10 +97,10 @@ exception NoRuleApplies
 let rec printtm (ctx: context) (t: term) = match t with
   | TmVar(i, n) ->
       if ctxlength ctx = n then
-        index2name ctx i
+        let (n, _) = getbinding ctx i in n
       else
         "bad index"
-  | TmAbs(x, t) ->
+  | TmAbs(x, _, t) ->
       let ctx', x' = pickfreshname ctx x in
       ("λ" ^ x' ^ "." ^ printtm ctx' t)
   | TmApp(t1, t2) -> printtm ctx t1 ^ " " ^ printtm ctx t2
@@ -119,7 +126,7 @@ let rec evalStep t = match t with
   | TmIsZero(TmZero) -> TmTrue
   | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
   | TmIsZero(t1) -> let t1' = evalStep t1 in TmIsZero(t1')
-  | TmApp(TmAbs(_, t), v2) when isval v2 -> termSubstTop v2 t
+  | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
   | TmApp(v1, t2) when isval v1 -> let t2' = evalStep t2 in TmApp(v1, t2')
   | TmApp(t1, t2) -> let t1' = evalStep t1 in TmApp(t1', t2)
   | _ -> raise NoRuleApplies
@@ -128,3 +135,36 @@ let rec eval t =
   try let t' = evalStep t
     in eval t'
   with NoRuleApplies -> t
+
+exception TypeError
+
+let rec typeof (ctx: context) (t: term) = match t with
+  | TmTrue -> TyBool
+  | TmFalse -> TyBool
+  | TmZero -> TyNat
+  | TmPred(t1) when ((=) (typeof ctx t1) TyNat) -> TyNat
+  | TmSucc(t1) when ((=) (typeof ctx t1) TyNat) -> TyNat
+  | TmIsZero(t1) when ((=) (typeof ctx t1) TyNat) -> TyBool
+  | TmIf(t1, t2, t3) ->
+      let ty2 = typeof ctx t2 in
+      let ty3 = typeof ctx t3 in
+      if (=) ty2 ty3 && (=) (typeof ctx t1) TyBool then ty2 else (raise TypeError)
+  | TmVar(i, _) -> (match getbinding ctx i with
+      | (_, NameBind) -> raise TypeError
+      | (_, VarBind(ty)) -> ty)
+  | TmAbs(x, ty1, t) ->
+      let ctx' = addbinding ctx x (VarBind(ty1)) in
+      let ty2 = typeof ctx' t in
+      TyArr(ty1, ty2)
+  | TmApp(t1, t2) ->
+      let ty1 = typeof ctx t1 in
+      let ty2 = typeof ctx t2 in
+      (match ty1 with
+        | TyArr(ty11, ty12) -> if (=) ty11 ty2 then ty12 else (raise TypeError)
+        | _ -> raise TypeError)
+  | _ -> raise TypeError
+
+let rec printty ty = match ty with
+  | TyBool -> "Bool"
+  | TyNat -> "Nat"
+  | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2
