@@ -56,32 +56,43 @@ term:
         TmAbs($2, $4, $6 ctx1) }
   | IF term THEN term ELSE term
     { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) }
-  (* NOTE: using derived forms currently means that the derived form will 
-   * show up in cases where a term doesn't get evaluated (e.g. the body of a
-   * function: lambda x: Nat . (x as Nat) will eval to λx.λid.x x : Nat -> Nat) *)
-  | term SEMICOLON term
-    { fun ctx ->
-        let ctx1 = addbinding ctx "_" NameBind in
-        TmApp(TmAbs("_", TyUnit, $3 ctx1), $1 ctx) }
-  | term AS Type
-    { fun ctx ->
-        let ctx1 = addbinding ctx "id" NameBind in
-        TmApp(TmAbs("id", $3, $1 ctx1), $1 ctx) }
   | LET IDENT EQ term IN term
     { fun ctx ->
         let ctx1 = addbinding ctx $2 NameBind in
-        TmLet($2, $4 ctx, $6 ctx1) }
-  | LCURLY term COMMA term RCURLY { fun ctx -> TmPair($2 ctx, $4 ctx) };
+        TmLet($2, $4 ctx, $6 ctx1) } ;
 
 AppTerm:
-  | ATerm               { $1 }
-  | AppTerm ATerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
-  | SUCC ATerm          { fun ctx -> TmSucc($2 ctx) }
-  | PRED ATerm          { fun ctx -> TmPred($2 ctx) }
-  | ISZERO ATerm        { fun ctx -> TmIsZero($2 ctx) } ;
+  | PathTerm               { $1 }
+  | AppTerm PathTerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
+  | SUCC PathTerm          { fun ctx -> TmSucc($2 ctx) }
+  | PRED PathTerm          { fun ctx -> TmPred($2 ctx) }
+  | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) } ;
+
+PathTerm:
+  | PathTerm DOT INTV { fun ctx -> TmProj($1 ctx, $3)}
+  | AscribeTerm       { $1 } ;
+
+AscribeTerm:
+  (* TODO: don't use derived form? *)
+  | ATerm AS Type
+    { fun ctx ->
+        let ctx1 = addbinding ctx "id" NameBind in
+        TmApp(TmAbs("id", $3, $1 ctx1), $1 ctx) }
+  | ATerm {$1} ;
+
+TermSeq:
+  | term { $1 }
+  (* NOTE: using derived forms currently means that the derived form will 
+   * show up in cases where a term doesn't get evaluated (e.g. the body of a
+   * function: lambda x: Nat . (x as Nat) will eval to λx.λid.x x : Nat -> Nat) *)
+  | term SEMICOLON TermSeq
+    { fun ctx ->
+        let ctx1 = addbinding ctx "_" NameBind in
+        TmApp(TmAbs("_", TyUnit, $3 ctx1), $1 ctx) } ;
 
 ATerm:
-  | LPAREN term RPAREN    { $2 }
+  | LPAREN TermSeq RPAREN    { $2 }
+  | LCURLY term COMMA term RCURLY { fun ctx -> TmPair($2 ctx, $4 ctx) }
   | IDENT                 { fun ctx -> TmVar(name2index ctx $1, ctxlength ctx) }
   | INTV
     { let rec f n = match n with

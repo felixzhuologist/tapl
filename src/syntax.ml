@@ -19,6 +19,7 @@ type term =
   | TmUnit
   | TmLet of string * term * term
   | TmPair of term * term
+  | TmProj of term * int
 
 type binding =
   | NameBind
@@ -74,6 +75,7 @@ let termShift d t =
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
     | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2) 
     | TmPair(t1, t2) -> TmPair(walk c t1, walk c t2)
+    | TmProj(t, i) -> TmProj(walk c t, i)
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -92,6 +94,7 @@ let termSubst j s t =
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
     | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2)
     | TmPair(t1, t2) -> TmPair(walk c t1, walk c t2)
+    | TmProj(t, i) -> TmProj(walk c t, i)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -138,6 +141,7 @@ let rec printtm (ctx: context) (t: term) = match t with
       printtm ctx t1 ^ " in " ^
       printtm (addbinding ctx n NameBind) t2
   | TmPair(t1, t2) -> "{" ^ printtm ctx t1 ^ ", " ^ printtm ctx t2 ^ "}"
+  | TmProj(t, i) -> printtm ctx t ^ "." ^ string_of_int i
 
 let rec evalStep ctx t = match t with
   | TmIf(TmTrue, t2, _) -> t2
@@ -153,10 +157,12 @@ let rec evalStep ctx t = match t with
   | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
   | TmApp(v1, t2) when isval v1 -> let t2' = evalStep ctx t2 in TmApp(v1, t2')
   | TmApp(t1, t2) -> let t1' = evalStep ctx t1 in TmApp(t1', t2)
-  | TmLet(n, v1, t2) when isval v1 -> termSubstTop v1 t2
+  | TmLet(_, v1, t2) when isval v1 -> termSubstTop v1 t2
   | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2)
   | TmPair(t1, t2) when not (isval t1) -> TmPair(evalStep ctx t1, t2)
   | TmPair(t1, t2) when not (isval t2) -> TmPair(t1, evalStep ctx t2)
+  | TmProj(TmPair(v1, _) as p, 1) when isval p -> v1
+  | TmProj(TmPair(_, v2) as p, 2) when isval p -> v2
   | _ -> raise NoRuleApplies
 
 let rec eval ctx t =
@@ -196,6 +202,12 @@ let rec typeof (ctx: context) (t: term) = match t with
       let ctx' = addbinding ctx x (VarBind(ty1)) in
       typeof ctx' t2
   | TmPair(t1, t2) -> TyPair(typeof ctx t1, typeof ctx t2)
+  | TmProj(t, 1) -> (match typeof ctx t with
+      | TyPair(ty1, _) -> ty1
+      | _ -> raise TypeError)
+  | TmProj(t, 2) -> (match typeof ctx t with
+      | TyPair(_, ty2) -> ty2
+      | _ -> raise TypeError)
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
