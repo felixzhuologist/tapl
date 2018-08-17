@@ -91,8 +91,8 @@ TermSeq:
         TmApp(TmAbs("_", TyUnit, $3 ctx1), $1 ctx) } ;
 
 ATerm:
-  | LPAREN TermSeq RPAREN    { $2 }
-  | LCURLY term COMMA term RCURLY { fun ctx -> TmPair($2 ctx, $4 ctx) }
+  | LPAREN TermSeq RPAREN { $2 }
+  | LCURLY Fields RCURLY  { fun ctx -> TmTuple($2 ctx) }
   | IDENT                 { fun ctx -> TmVar(name2index ctx $1, ctxlength ctx) }
   | INTV
     { let rec f n = match n with
@@ -102,6 +102,16 @@ ATerm:
   | TRUE                  { fun _ -> TmTrue }
   | FALSE                 { fun _ -> TmFalse }
   | UNIT                  { fun _ -> TmUnit } ;
+
+Fields:
+  | /* empty */
+      { fun _ -> [] }
+  | NEFields
+      { $1 } ;
+
+NEFields:
+  | term                { fun ctx -> [$1 ctx] }
+  | term COMMA NEFields { fun ctx -> ($1 ctx) :: ($3 ctx) } ;
 
 Type:
   | AType            { $1 }

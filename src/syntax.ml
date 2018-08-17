@@ -2,7 +2,7 @@ type ty =
   | TyBool
   | TyNat
   | TyUnit
-  | TyPair of ty * ty
+  | TyTuple of ty list
   | TyArr of ty * ty
 
 type term = 
@@ -18,7 +18,7 @@ type term =
   | TmIsZero of term
   | TmUnit
   | TmLet of string * term * term
-  | TmPair of term * term
+  | TmTuple of term list
   | TmProj of term * int
 
 type binding =
@@ -74,7 +74,7 @@ let termShift d t =
     | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
     | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2) 
-    | TmPair(t1, t2) -> TmPair(walk c t1, walk c t2)
+    | TmTuple(fields) -> TmTuple(List.map (walk c) fields)
     | TmProj(t, i) -> TmProj(walk c t, i)
   in walk 0 t
 
@@ -93,7 +93,7 @@ let termSubst j s t =
     | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
     | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2)
-    | TmPair(t1, t2) -> TmPair(walk c t1, walk c t2)
+    | TmTuple(fields) -> TmTuple(List.map (walk c) fields)
     | TmProj(t, i) -> TmProj(walk c t, i)
   in walk 0 t
 
@@ -105,7 +105,7 @@ let rec isval t = match t with
   | TmUnit -> true
   | t when isnumericval t -> true
   | TmAbs(_, _, _) -> true
-  | TmPair(t1, t2) when isval t1 && isval t2 -> true
+  | TmTuple(fields) -> List.for_all isval fields
   | _ -> false
 
 exception NoRuleApplies
@@ -140,7 +140,7 @@ let rec printtm (ctx: context) (t: term) = match t with
       "let " ^ n ^ "=" ^
       printtm ctx t1 ^ " in " ^
       printtm (addbinding ctx n NameBind) t2
-  | TmPair(t1, t2) -> "{" ^ printtm ctx t1 ^ ", " ^ printtm ctx t2 ^ "}"
+  | TmTuple(fields) -> "{" ^ (String.concat ", " (List.map (printtm ctx) fields)) ^ "}"
   | TmProj(t, i) -> printtm ctx t ^ "." ^ string_of_int i
 
 let rec evalStep ctx t = match t with
@@ -159,10 +159,17 @@ let rec evalStep ctx t = match t with
   | TmApp(t1, t2) -> let t1' = evalStep ctx t1 in TmApp(t1', t2)
   | TmLet(_, v1, t2) when isval v1 -> termSubstTop v1 t2
   | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2)
-  | TmPair(t1, t2) when not (isval t1) -> TmPair(evalStep ctx t1, t2)
-  | TmPair(t1, t2) when not (isval t2) -> TmPair(t1, evalStep ctx t2)
-  | TmProj(TmPair(v1, _) as p, 1) when isval p -> v1
-  | TmProj(TmPair(_, v2) as p, 2) when isval p -> v2
+  | TmTuple(fields) ->
+      let rec evalnextfield l = match l with
+        | [] -> raise NoRuleApplies
+        | v::fs when isval v -> let vs = evalnextfield fs in v::vs
+        | f::fs -> let v = evalStep ctx f in v::fs
+      in let fields' = evalnextfield fields in
+      TmTuple(fields')
+  | TmProj(TmTuple(fields) as t, i) when isval t ->
+      (try List.nth fields (i - 1)
+      with Failure _ ->  raise NoRuleApplies)
+  | TmProj(t, i) -> let t' = evalStep ctx t in TmProj(t', i)
   | _ -> raise NoRuleApplies
 
 let rec eval ctx t =
@@ -201,18 +208,16 @@ let rec typeof (ctx: context) (t: term) = match t with
       let ty1 = typeof ctx t1 in
       let ctx' = addbinding ctx x (VarBind(ty1)) in
       typeof ctx' t2
-  | TmPair(t1, t2) -> TyPair(typeof ctx t1, typeof ctx t2)
-  | TmProj(t, 1) -> (match typeof ctx t with
-      | TyPair(ty1, _) -> ty1
-      | _ -> raise TypeError)
-  | TmProj(t, 2) -> (match typeof ctx t with
-      | TyPair(_, ty2) -> ty2
-      | _ -> raise TypeError)
+  | TmTuple(fields) -> TyTuple(List.map (typeof ctx) fields)
+  | TmProj(TmTuple(_) as t, i) ->
+      (match typeof ctx t with
+        | TyTuple(types) -> try List.nth types (i-1) with Failure _ -> raise TypeError
+        | _ -> raise TypeError)
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
   | TyBool -> "Bool"
   | TyNat -> "Nat"
   | TyUnit -> "Unit"
-  | TyPair(ty1, ty2) -> printty ty1 ^ " * " ^ printty ty2
+  | TyTuple(tys) -> String.concat " * " (List.map printty tys)
   | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2
