@@ -209,7 +209,7 @@ let rec typeof (ctx: context) (t: term) = match t with
       let ctx' = addbinding ctx x (VarBind(ty1)) in
       typeof ctx' t2
   | TmTuple(fields) -> TyTuple(List.map (typeof ctx) fields)
-  | TmProj(TmTuple(_) as t, i) ->
+  | TmProj(t, i) ->
       (match typeof ctx t with
         | TyTuple(types) -> try List.nth types (i-1) with Failure _ -> raise TypeError
         | _ -> raise TypeError)
