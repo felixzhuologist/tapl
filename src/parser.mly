@@ -69,8 +69,8 @@ AppTerm:
   | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) } ;
 
 PathTerm:
-  | PathTerm DOT INTV { fun ctx -> TmProj($1 ctx, $3)}
-  | AscribeTerm       { $1 } ;
+  | PathTerm DOT IDENT { fun ctx -> TmProj($1 ctx, $3)}
+  | AscribeTerm        { $1 } ;
 
 AscribeTerm:
   (* TODO: don't use derived form? *)
@@ -92,7 +92,7 @@ TermSeq:
 
 ATerm:
   | LPAREN TermSeq RPAREN { $2 }
-  | LCURLY Fields RCURLY  { fun ctx -> TmTuple($2 ctx) }
+  | LCURLY Fields RCURLY  { fun ctx -> TmRecord($2 ctx 1) }
   | IDENT                 { fun ctx -> TmVar(name2index ctx $1, ctxlength ctx) }
   | INTV
     { let rec f n = match n with
@@ -105,13 +105,28 @@ ATerm:
 
 Fields:
   | /* empty */
-      { fun _ -> [] }
+      { fun _ _ -> [] }
   | NEFields
       { $1 } ;
 
+(* Take in an index in addition to the context to support implicit labels -
+ * if no label is provided, then we use the index as the label. This also
+ * means that tuples are implemented as records under the hood *)
 NEFields:
-  | term                { fun ctx -> [$1 ctx] }
-  | term COMMA NEFields { fun ctx -> ($1 ctx) :: ($3 ctx) } ;
+  | Field                { fun ctx i -> [$1 ctx i] }
+  | Field COMMA NEFields 
+      (* overwrite field values for labels that already exist, which makes things like
+       * {a=1, a=2} evaluate to {a=2} *)
+      { fun ctx i ->
+          let (new_label, f) = ($1 ctx i) in
+          let existing_fields = ($3 ctx (i+1)) in
+          if List.mem_assoc new_label existing_fields then
+          existing_fields else
+          (new_label, f) :: existing_fields } ;
+
+Field:
+  | IDENT EQ term { fun ctx _ -> ($1, $3 ctx) }
+  | term          { fun ctx i -> (string_of_int i, $1 ctx) } ;
 
 Type:
   | AType            { $1 }

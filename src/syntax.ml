@@ -2,7 +2,7 @@ type ty =
   | TyBool
   | TyNat
   | TyUnit
-  | TyTuple of ty list
+  | TyRecord of (string * ty) list
   | TyArr of ty * ty
 
 type term = 
@@ -18,8 +18,8 @@ type term =
   | TmIsZero of term
   | TmUnit
   | TmLet of string * term * term
-  | TmTuple of term list
-  | TmProj of term * int
+  | TmRecord of (string * term) list
+  | TmProj of term * string
 
 type binding =
   | NameBind
@@ -74,8 +74,8 @@ let termShift d t =
     | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
     | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2) 
-    | TmTuple(fields) -> TmTuple(List.map (walk c) fields)
-    | TmProj(t, i) -> TmProj(walk c t, i)
+    | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
+    | TmProj(t, l) -> TmProj(walk c t, l)
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -93,8 +93,8 @@ let termSubst j s t =
     | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
     | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
     | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2)
-    | TmTuple(fields) -> TmTuple(List.map (walk c) fields)
-    | TmProj(t, i) -> TmProj(walk c t, i)
+    | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
+    | TmProj(t, l) -> TmProj(walk c t, l)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -105,7 +105,7 @@ let rec isval t = match t with
   | TmUnit -> true
   | t when isnumericval t -> true
   | TmAbs(_, _, _) -> true
-  | TmTuple(fields) -> List.for_all isval fields
+  | TmRecord(fields) -> List.for_all isval (List.map (fun (_, f) -> f) fields)
   | _ -> false
 
 exception NoRuleApplies
@@ -140,8 +140,11 @@ let rec printtm (ctx: context) (t: term) = match t with
       "let " ^ n ^ "=" ^
       printtm ctx t1 ^ " in " ^
       printtm (addbinding ctx n NameBind) t2
-  | TmTuple(fields) -> "{" ^ (String.concat ", " (List.map (printtm ctx) fields)) ^ "}"
-  | TmProj(t, i) -> printtm ctx t ^ "." ^ string_of_int i
+  | TmRecord(fields) ->
+      let printfield (label, field) = label ^ "=" ^ printtm ctx field in
+      let fs = List.map printfield fields in
+      "{" ^ (String.concat "," fs) ^ "}"
+  | TmProj(t, l) -> printtm ctx t ^ "." ^ l
 
 let rec evalStep ctx t = match t with
   | TmIf(TmTrue, t2, _) -> t2
@@ -159,17 +162,17 @@ let rec evalStep ctx t = match t with
   | TmApp(t1, t2) -> let t1' = evalStep ctx t1 in TmApp(t1', t2)
   | TmLet(_, v1, t2) when isval v1 -> termSubstTop v1 t2
   | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2)
-  | TmTuple(fields) ->
+  | TmRecord(fields) ->
       let rec evalnextfield l = match l with
         | [] -> raise NoRuleApplies
-        | v::fs when isval v -> let vs = evalnextfield fs in v::vs
-        | f::fs -> let v = evalStep ctx f in v::fs
+        | (l,v)::fs when isval v -> let vs = evalnextfield fs in (l,v)::vs
+        | (l,f)::fs -> let v = evalStep ctx f in (l,v)::fs
       in let fields' = evalnextfield fields in
-      TmTuple(fields')
-  | TmProj(TmTuple(fields) as t, i) when isval t ->
-      (try List.nth fields (i - 1)
-      with Failure _ ->  raise NoRuleApplies)
-  | TmProj(t, i) -> let t' = evalStep ctx t in TmProj(t', i)
+      TmRecord(fields')
+  | TmProj(TmRecord(fields) as t, l) when isval t ->
+      (try List.assoc l fields
+      with Not_found ->  raise NoRuleApplies)
+  | TmProj(t, l) -> let t' = evalStep ctx t in TmProj(t', l)
   | _ -> raise NoRuleApplies
 
 let rec eval ctx t =
@@ -208,10 +211,11 @@ let rec typeof (ctx: context) (t: term) = match t with
       let ty1 = typeof ctx t1 in
       let ctx' = addbinding ctx x (VarBind(ty1)) in
       typeof ctx' t2
-  | TmTuple(fields) -> TyTuple(List.map (typeof ctx) fields)
-  | TmProj(t, i) ->
+  | TmRecord(fields) ->
+      TyRecord(List.map (fun (label, field) -> (label, (typeof ctx field))) fields)
+  | TmProj(t, l) ->
       (match typeof ctx t with
-        | TyTuple(types) -> try List.nth types (i-1) with Failure _ -> raise TypeError
+        | TyRecord(types) -> try List.assoc l types with Not_found -> raise TypeError
         | _ -> raise TypeError)
   | _ -> raise TypeError
 
@@ -219,5 +223,7 @@ let rec printty ty = match ty with
   | TyBool -> "Bool"
   | TyNat -> "Nat"
   | TyUnit -> "Unit"
-  | TyTuple(tys) -> String.concat " * " (List.map printty tys)
+  | TyRecord(tys) ->
+      let printfield (label, fieldty) = label ^ "=" ^ (printty fieldty) in
+      "{" ^ (String.concat ", " (List.map printfield tys)) ^ "}"
   | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2
