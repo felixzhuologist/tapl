@@ -99,7 +99,7 @@ let rec typeof (ctx: context) (t: term) = match t with
       let ty1 = typeof ctx t1 in
       let ty2 = typeof ctx t2 in
       (match ty1 with
-        | TyArr(ty11, ty12) -> if (=) ty11 ty2 then ty12 else (raise TypeError)
+        | TyArr(ty11, ty12) -> (if (=) ty11 ty2 then ty12 else (raise TypeError))
         | _ -> raise TypeError)
   | TmLet(x, t1, t2) ->
       let ty1 = typeof ctx t1 in
@@ -109,7 +109,7 @@ let rec typeof (ctx: context) (t: term) = match t with
       TyRecord(List.map (fun (label, field) -> (label, (typeof ctx field))) fields)
   | TmProj(t, l) ->
       (match typeof ctx t with
-        | TyRecord(types) -> try List.assoc l types with Not_found -> raise TypeError
+        | TyRecord(types) -> (try List.assoc l types with Not_found -> raise TypeError)
         | _ -> raise TypeError)
   | TmAscribe(t, ty) ->
       let actual = typeof ctx t in
@@ -240,7 +240,10 @@ let rec evalStep ctx t = match t with
   | TmProj(TmRecord(fields) as t, l) when isval t ->
       (try List.assoc l fields
       with Not_found ->  raise NoRuleApplies)
-  | TmProj(t, l) -> let t' = evalStep ctx t in TmProj(t', l)
+  | TmProj(t, l) -> 
+      if isval t
+      then raise NoRuleApplies
+      else let t' = evalStep ctx t in TmProj(t', l)
   | TmAscribe(t, _) -> t
   | _ -> raise NoRuleApplies
 

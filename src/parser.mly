@@ -75,6 +75,7 @@ AppTerm:
   | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) } ;
 
 PathTerm:
+  | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
   | PathTerm DOT IDENT { fun ctx -> TmProj($1 ctx, $3)}
   | AscribeTerm        { $1 } ;
 
