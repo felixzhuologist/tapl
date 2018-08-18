@@ -3,6 +3,7 @@ type ty =
   | TyNat
   | TyUnit
   | TyRecord of (string * ty) list
+  | TyVariant of (string * ty) list
   | TyArr of ty * ty
 
 type term = 
@@ -21,6 +22,7 @@ type term =
   | TmRecord of (string * term) list
   | TmProj of term * string
   | TmAscribe of term * ty
+  | TmTag of string * term * ty
 
 type binding =
   | NameBind
@@ -69,6 +71,7 @@ let rec isval t = match t with
   | TmAbs(_, _, _) -> true
   | TmRecord(fields) -> List.for_all isval (List.map (fun (_, f) -> f) fields)
   | TmAscribe(t, _) -> isval t
+  | TmTag(_, t, _) -> isval t
   | _ -> false
 
 exception TypeError
@@ -111,6 +114,9 @@ let rec typeof (ctx: context) (t: term) = match t with
   | TmAscribe(t, ty) ->
       let actual = typeof ctx t in
       if (=) actual ty then ty else raise TypeError
+  | TmTag(label, t, (TyVariant(variants) as ty)) ->
+      let expected = try List.assoc label variants with Not_found -> raise TypeError in
+      if (=) expected (typeof ctx t) then ty else raise TypeError
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
@@ -121,6 +127,9 @@ let rec printty ty = match ty with
       let printfield (label, fieldty) = label ^ "=" ^ (printty fieldty) in
       "{" ^ (String.concat ", " (List.map printfield tys)) ^ "}"
   | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2
+  | TyVariant(tys) ->
+      let printfield (label, fieldty) = label ^ ": " ^ (printty fieldty) in
+      "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
 
 let termShift d t =
   let rec walk c t = match t with
@@ -139,6 +148,7 @@ let termShift d t =
     | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
     | TmProj(t, l) -> TmProj(walk c t, l)
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
+    | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -159,6 +169,7 @@ let termSubst j s t =
     | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
     | TmProj(t, l) -> TmProj(walk c t, l)
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
+    | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -201,6 +212,7 @@ let rec printtm (ctx: context) (t: term) = match t with
       "{" ^ (String.concat "," fs) ^ "}"
   | TmProj(t, l) -> printtm ctx t ^ "." ^ l
   | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
+  | TmTag(s, t, _) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
 
 let rec evalStep ctx t = match t with
   | TmIf(TmTrue, t2, _) -> t2

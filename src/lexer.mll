@@ -21,14 +21,18 @@ rule read =
   | "Unit"   { TYUNIT }
   | "λ"      { LAMBDA }
   | "->"     { ARROW }
+  | "=>"     { FATARROW }
   | "."      { DOT }
   | ","      { COMMA }
   | "("      { LPAREN }
   | ")"      { RPAREN }
   | "{"      { LCURLY }
   | "}"      { RCURLY }
+  | "<"      { LT }
+  | ">"      { GT }
   | ":"      { COLON }
   | ";"      { SEMICOLON }
+  | "="      { EQ }
   | "if"     { IF }
   | "then"   { THEN }
   | "else"   { ELSE }
@@ -39,8 +43,9 @@ rule read =
   | "false"  { FALSE }
   | "as"     { AS }
   | "let"    { LET }
-  | "="      { EQ }
   | "in"     { IN }
+  | "case"   { CASE }
+  | "of"     { OF }
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }

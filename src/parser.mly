@@ -10,6 +10,8 @@ open Syntax
 %token RPAREN
 %token LCURLY
 %token RCURLY
+%token LT
+%token GT
 %token COMMA
 %token EOF
 
@@ -27,6 +29,7 @@ open Syntax
 %token TYBOOL
 %token TYNAT
 %token ARROW
+%token FATARROW
 %token COLON
 
 %token UNIT
@@ -37,6 +40,9 @@ open Syntax
 %token LET
 %token EQ
 %token IN
+
+%token CASE
+%token OF
 
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
@@ -73,8 +79,9 @@ PathTerm:
   | AscribeTerm        { $1 } ;
 
 AscribeTerm:
-  | ATerm AS Type { fun ctx -> TmAscribe($1 ctx, $3) }
-  | ATerm         { $1 } ;
+  | LT IDENT EQ term GT AS Type { fun ctx -> TmTag($2, $4 ctx, $7) }
+  | ATerm AS Type               { fun ctx -> TmAscribe($1 ctx, $3) }
+  | ATerm                       { $1 } ;
 
 TermSeq:
   | term { $1 }
@@ -101,9 +108,9 @@ ATerm:
 
 Fields:
   | /* empty */
-      { fun _ _ -> [] }
+    { fun _ _ -> [] }
   | NEFields
-      { $1 } ;
+    { $1 } ;
 
 (* Take in an index in addition to the context to support implicit labels -
  * if no label is provided, then we use the index as the label. This also
@@ -124,12 +131,50 @@ Field:
   | IDENT EQ term { fun ctx _ -> ($1, $3 ctx) }
   | term          { fun ctx i -> (string_of_int i, $1 ctx) } ;
 
+(* type fields separated by = *)
+TypeFieldsEq:
+  | /* empty */
+    { [] }
+  | NETypeFieldsEq { $1 } ;
+
+NETypeFieldsEq:
+  | TypeFieldEq { [$1] } 
+  | TypeFieldEq COMMA NETypeFieldsEq
+      { let (new_label, ty) = $1 in
+        let existing_fields = $3 in
+        if List.mem_assoc new_label existing_fields then
+        existing_fields else
+        (new_label, ty) :: existing_fields } ;  
+
+TypeFieldEq:
+  | IDENT EQ Type { ($1, $3) } ;
+
+(* type fields separated by : *)
+TypeFieldsColon:
+  | /* empty */
+    { [] }
+  | NETypeFieldsColon { $1 } ;
+
+NETypeFieldsColon:
+  | TypeFieldColon { [$1] } 
+  | TypeFieldColon COMMA NETypeFieldsColon
+      { let (new_label, ty) = $1 in
+        let existing_fields = $3 in
+        if List.mem_assoc new_label existing_fields then
+        existing_fields else
+        (new_label, ty) :: existing_fields } ;  
+
+TypeFieldColon:
+  | IDENT COLON Type { ($1, $3) } ;
+
 Type:
   | AType            { $1 }
   | AType ARROW Type { TyArr($1, $3) } ;
 
 AType:
-  | LPAREN Type RPAREN   { $2 }
-  | TYUNIT               { TyUnit }
-  | TYBOOL               { TyBool }
-  | TYNAT                { TyNat } ;
+  | LPAREN Type RPAREN         { $2 }
+  | LCURLY TypeFieldsEq RCURLY { TyRecord($2) }
+  | LT TypeFieldsColon GT      { TyVariant($2) }
+  | TYUNIT                     { TyUnit }
+  | TYBOOL                     { TyBool }
+  | TYNAT                      { TyNat } ;
