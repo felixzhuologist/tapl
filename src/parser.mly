@@ -73,12 +73,8 @@ PathTerm:
   | AscribeTerm        { $1 } ;
 
 AscribeTerm:
-  (* TODO: don't use derived form? *)
-  | ATerm AS Type
-    { fun ctx ->
-        let ctx1 = addbinding ctx "id" NameBind in
-        TmApp(TmAbs("id", $3, $1 ctx1), $1 ctx) }
-  | ATerm {$1} ;
+  | ATerm AS Type { fun ctx -> TmAscribe($1 ctx, $3) }
+  | ATerm         { $1 } ;
 
 TermSeq:
   | term { $1 }
