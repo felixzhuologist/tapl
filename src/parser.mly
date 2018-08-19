@@ -37,6 +37,7 @@ open Syntax
 %token SEMICOLON
 %token AS
 %token LET
+%token LETREC
 %token EQ
 %token IN
 %token CASE
@@ -64,7 +65,12 @@ term:
   | LET IDENT EQ term IN term
     { fun ctx ->
         let ctx1 = addbinding ctx $2 NameBind in
-        TmLet($2, $4 ctx, $6 ctx1) } ;
+        TmLet($2, $4 ctx, $6 ctx1) }
+  | LETREC IDENT COLON Type EQ term IN term
+    { fun ctx ->
+        let ctx1 = addbinding ctx $2 NameBind in
+        let recfunc = TmFix(TmAbs($2, $4, $6 ctx1)) in
+        TmLet($2, recfunc, $8 ctx1) } ;
 
 AppTerm:
   | PathTerm               { $1 }

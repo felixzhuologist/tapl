@@ -43,6 +43,7 @@ rule read =
   | "false"  { FALSE }
   | "as"     { AS }
   | "let"    { LET }
+  | "letrec" { LETREC }
   | "in"     { IN }
   | "case"   { CASE }
   | "of"     { OF }
