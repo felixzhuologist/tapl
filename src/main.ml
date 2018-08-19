@@ -23,7 +23,7 @@ let _ =
     let f = open_in Sys.argv.(1) in
     try
       Stream.iter
-        (fun line -> print_endline line; process_line line)
+        (fun line -> print_endline ("> " ^ line); process_line line)
         (line_stream_of_channel f);
       close_in f
     with e ->

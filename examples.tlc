@@ -3,3 +3,4 @@ let x = {1, true, 3} in x.2
 {a=1, a=2}.a
 {a=1} as {a=Nat}
 <none=unit> as <none: Unit, some: Nat>
+case (<some=3> as <none: Unit, some: Nat>) of <none=x> => 0 <some=x> => x

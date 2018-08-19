@@ -23,6 +23,7 @@ type term =
   | TmProj of term * string
   | TmAscribe of term * ty
   | TmTag of string * term * ty
+  | TmCase of term * (string * (string * term)) list
 
 type binding =
   | NameBind
@@ -117,6 +118,19 @@ let rec typeof (ctx: context) (t: term) = match t with
   | TmTag(label, t, (TyVariant(variants) as ty)) ->
       let expected = try List.assoc label variants with Not_found -> raise TypeError in
       if (=) expected (typeof ctx t) then ty else raise TypeError
+  | TmCase(t, cases) ->
+      (match typeof ctx t with
+        | TyVariant(variants) ->
+            let get_type (n, (x, t)) =
+              let variant_type = try
+                List.assoc n variants with
+                Not_found -> raise TypeError in
+              typeof (addbinding ctx x (VarBind(variant_type))) t in
+            let result_types = List.map get_type cases in
+            (* TODO: check that all result types are the same *)
+            (* non emptiness should be enforced by the parser *)
+            List.hd result_types
+        | _ -> raise TypeError) (* case statements only work on variants for now *)
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
@@ -149,6 +163,9 @@ let termShift d t =
     | TmProj(t, l) -> TmProj(walk c t, l)
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
     | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
+    | TmCase(t, cases) ->
+        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
+        TmCase(walk c t, cases')
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -170,6 +187,9 @@ let termSubst j s t =
     | TmProj(t, l) -> TmProj(walk c t, l)
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
     | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
+    | TmCase(t, cases) ->
+        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
+        TmCase(walk c t, cases')
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -213,6 +233,7 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmProj(t, l) -> printtm ctx t ^ "." ^ l
   | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
   | TmTag(s, t, _) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
+  | _ -> "TODO"
 
 let rec evalStep ctx t = match t with
   | TmIf(TmTrue, t2, _) -> t2
@@ -245,6 +266,16 @@ let rec evalStep ctx t = match t with
       then raise NoRuleApplies
       else let t' = evalStep ctx t in TmProj(t', l)
   | TmAscribe(t, _) -> t
+  | TmCase(t, cases) when isval t ->
+      (match t with
+        | TmTag(label, value, _) ->
+            (let (_, case) =
+              try List.assoc label cases
+              with Not_found -> raise NoRuleApplies
+            in
+            termSubstTop value case)
+        | _ -> raise NoRuleApplies)
+  | TmCase(t, cases) -> let t' = evalStep ctx t in TmCase(t', cases)
   | _ -> raise NoRuleApplies
 
 let rec eval ctx t =

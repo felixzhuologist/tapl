@@ -69,6 +69,9 @@ term:
 
 AppTerm:
   | PathTerm               { $1 }
+  (* TODO: fix S/R conflict here *)
+  | CASE term OF Cases
+      { fun ctx -> TmCase($2 ctx, $4 ctx) }
   | AppTerm PathTerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
   | SUCC PathTerm          { fun ctx -> TmSucc($2 ctx) }
   | PRED PathTerm          { fun ctx -> TmPred($2 ctx) }
@@ -106,6 +109,17 @@ ATerm:
   | TRUE                  { fun _ -> TmTrue }
   | FALSE                 { fun _ -> TmFalse }
   | UNIT                  { fun _ -> TmUnit } ;
+
+Cases:
+  | Case       { fun ctx -> [$1 ctx]}
+  | Case Cases { fun ctx -> ($1 ctx)::($2 ctx) } ;
+
+Case:
+  (* TODO: replace ATerm with term without running into S/R conflicts *)
+  | LT IDENT EQ IDENT GT FATARROW ATerm 
+      { fun ctx ->
+          let ctx1 = addbinding ctx $4 NameBind in
+          ($2, ($4, $7 ctx1)) } ;
 
 Fields:
   | /* empty */
