@@ -24,6 +24,7 @@ type term =
   | TmAscribe of term * ty
   | TmTag of string * term * ty
   | TmCase of term * (string * (string * term)) list
+  | TmFix of term
 
 type binding =
   | NameBind
@@ -131,6 +132,10 @@ let rec typeof (ctx: context) (t: term) = match t with
             (* non emptiness should be enforced by the parser *)
             List.hd result_types
         | _ -> raise TypeError) (* case statements only work on variants for now *)
+  | TmFix(t) ->
+      (match typeof ctx t with
+        | TyArr(ty1, ty2) -> if (=) ty1 ty2 then ty1 else raise TypeError
+        | _ -> raise TypeError)
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
@@ -166,6 +171,7 @@ let termShift d t =
     | TmCase(t, cases) ->
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
+    | TmFix(t) -> TmFix(walk c t)
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -190,6 +196,7 @@ let termSubst j s t =
     | TmCase(t, cases) ->
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
+    | TmFix(t) -> TmFix(walk c t)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -233,6 +240,7 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmProj(t, l) -> printtm ctx t ^ "." ^ l
   | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
   | TmTag(s, t, _) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
+  | TmFix(t) -> "fix " ^ printtm ctx t
   | _ -> "TODO"
 
 let rec evalStep ctx t = match t with
@@ -276,6 +284,11 @@ let rec evalStep ctx t = match t with
             termSubstTop value case)
         | _ -> raise NoRuleApplies)
   | TmCase(t, cases) -> let t' = evalStep ctx t in TmCase(t', cases)
+  | TmFix(t1) as t when isval t1 ->
+      (match t1 with
+        | TmAbs(_, _, t12) -> termSubstTop t t12
+        | _ -> raise NoRuleApplies)
+  | TmFix(t) -> let t' = evalStep ctx t in TmFix(t')
   | _ -> raise NoRuleApplies
 
 let rec eval ctx t =

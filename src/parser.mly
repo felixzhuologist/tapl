@@ -36,13 +36,12 @@ open Syntax
 %token TYUNIT
 %token SEMICOLON
 %token AS
-
 %token LET
 %token EQ
 %token IN
-
 %token CASE
 %token OF
+%token FIX
 
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
@@ -69,18 +68,19 @@ term:
 
 AppTerm:
   | PathTerm               { $1 }
-  (* TODO: fix S/R conflict here *)
-  | CASE term OF Cases
-      { fun ctx -> TmCase($2 ctx, $4 ctx) }
   | AppTerm PathTerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
   | SUCC PathTerm          { fun ctx -> TmSucc($2 ctx) }
   | PRED PathTerm          { fun ctx -> TmPred($2 ctx) }
-  | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) } ;
+  | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) }
+  | FIX PathTerm           { fun ctx -> TmFix($2 ctx) } ;
 
 PathTerm:
   | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
   | PathTerm DOT IDENT { fun ctx -> TmProj($1 ctx, $3)}
   | AscribeTerm        { $1 } ;
+  (* TODO: fix S/R conflict here *)
+  | CASE AscribeTerm OF Cases
+        { fun ctx -> TmCase($2 ctx, $4 ctx) }
 
 AscribeTerm:
   | LT IDENT EQ term GT AS Type { fun ctx -> TmTag($2, $4 ctx, $7) }

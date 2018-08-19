@@ -4,3 +4,4 @@ let x = {1, true, 3} in x.2
 {a=1} as {a=Nat}
 <none=unit> as <none: Unit, some: Nat>
 case (<some=3> as <none: Unit, some: Nat>) of <none=x> => 0 <some=x> => x
+let ff = λie: Nat -> Bool . (λx: Nat . if iszero x then true else (if iszero (pred x) then false else ie (pred (pred x)))) in let iseven = fix ff in iseven 6

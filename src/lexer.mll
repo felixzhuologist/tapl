@@ -46,6 +46,7 @@ rule read =
   | "in"     { IN }
   | "case"   { CASE }
   | "of"     { OF }
+  | "fix"    { FIX }
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
