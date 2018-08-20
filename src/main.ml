@@ -10,7 +10,7 @@ let process_line line =
   try
     let lexbuf = Lexing.from_string line in
     let ast = (Parser.toplevel Lexer.read lexbuf) emptycontext in
-    let result = eval emptycontext ast in
+    let (result, _) = eval emptycontext emptystore ast in
     let ty = typeof emptycontext ast in
     print_endline ((printtm emptycontext result) ^ " : " ^ (printty ty))
   with
