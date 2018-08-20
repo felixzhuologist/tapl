@@ -5,6 +5,7 @@ type ty =
   | TyRecord of (string * ty) list
   | TyVariant of (string * ty) list
   | TyArr of ty * ty
+  | TyRef of ty
 
 type term = 
   | TmVar of int * int
@@ -25,6 +26,10 @@ type term =
   | TmTag of string * term * ty
   | TmCase of term * (string * (string * term)) list
   | TmFix of term
+  | TmRef of term
+  | TmLoc of int
+  | TmDeref of term
+  | TmAssign of term * term
 
 type binding =
   | NameBind
@@ -136,6 +141,9 @@ let rec typeof (ctx: context) (t: term) = match t with
       (match typeof ctx t with
         | TyArr(ty1, ty2) -> if (=) ty1 ty2 then ty1 else raise TypeError
         | _ -> raise TypeError)
+  | TmRef(_) | TmLoc(_) -> TyRef(TyUnit)
+  | TmAssign(_, _) -> TyUnit
+  | TmDeref(t) -> TyUnit
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
@@ -149,6 +157,7 @@ let rec printty ty = match ty with
   | TyVariant(tys) ->
       let printfield (label, fieldty) = label ^ ": " ^ (printty fieldty) in
       "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
+  | TyRef(ty) -> "Ref " ^ printty ty
 
 let termShift d t =
   let rec walk c t = match t with
@@ -172,6 +181,10 @@ let termShift d t =
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
     | TmFix(t) -> TmFix(walk c t)
+    | TmRef(t) -> TmRef(walk c t)
+    | TmLoc(_) as t -> t
+    | TmDeref(t) -> TmDeref(walk c t)
+    | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -197,6 +210,10 @@ let termSubst j s t =
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
     | TmFix(t) -> TmFix(walk c t)
+    | TmRef(t) -> TmRef(walk c t)
+    | TmLoc(_) as t -> t
+    | TmDeref(t) -> TmDeref(walk c t)
+    | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -241,6 +258,8 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
   | TmTag(s, t, _) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
   | TmFix(t) -> "fix " ^ printtm ctx t
+  | TmRef(t) -> "ref " ^ printtm ctx t
+  | TmLoc(i) -> "<loc #" ^ string_of_int i ^ ">"
   | _ -> "TODO"
 
 let rec evalStep ctx t = match t with

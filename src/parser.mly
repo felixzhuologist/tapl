@@ -44,6 +44,11 @@ open Syntax
 %token OF
 %token FIX
 
+%token REF
+%token BANG
+%token ASSIGN
+%token TYREF
+
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
 
@@ -70,7 +75,9 @@ term:
     { fun ctx ->
         let ctx1 = addbinding ctx $2 NameBind in
         let recfunc = TmFix(TmAbs($2, $4, $6 ctx1)) in
-        TmLet($2, recfunc, $8 ctx1) } ;
+        TmLet($2, recfunc, $8 ctx1) }
+  | AppTerm ASSIGN AppTerm
+    { fun ctx -> TmAssign($1 ctx, $3 ctx) } ;
 
 AppTerm:
   | PathTerm               { $1 }
@@ -78,15 +85,17 @@ AppTerm:
   | SUCC PathTerm          { fun ctx -> TmSucc($2 ctx) }
   | PRED PathTerm          { fun ctx -> TmPred($2 ctx) }
   | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) }
-  | FIX PathTerm           { fun ctx -> TmFix($2 ctx) } ;
+  | FIX PathTerm           { fun ctx -> TmFix($2 ctx) }
+  | REF PathTerm           { fun ctx -> TmRef($2 ctx) }
+  | BANG PathTerm          { fun ctx -> TmDeref($2 ctx) } ;
 
 PathTerm:
   | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
   | PathTerm DOT IDENT { fun ctx -> TmProj($1 ctx, $3)}
-  | AscribeTerm        { $1 } ;
+  | AscribeTerm        { $1 }
   (* TODO: fix S/R conflict here *)
   | CASE AscribeTerm OF Cases
-        { fun ctx -> TmCase($2 ctx, $4 ctx) }
+        { fun ctx -> TmCase($2 ctx, $4 ctx) } ;
 
 AscribeTerm:
   | LT IDENT EQ term GT AS Type { fun ctx -> TmTag($2, $4 ctx, $7) }
@@ -190,6 +199,7 @@ TypeFieldColon:
 
 Type:
   | AType            { $1 }
+  | TYREF AType      { TyRef($2) }
   | AType ARROW Type { TyArr($1, $3) } ;
 
 AType:
