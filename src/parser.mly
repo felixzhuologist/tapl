@@ -14,6 +14,7 @@ open Syntax
 %token GT
 %token COMMA
 %token EOF
+%token VBAR
 
 %token TRUE
 %token FALSE
@@ -76,6 +77,8 @@ term:
         let ctx1 = addbinding ctx $2 NameBind in
         let recfunc = TmFix(TmAbs($2, $4, $6 ctx1)) in
         TmLet($2, recfunc, $8 ctx1) }
+  | CASE term OF Cases
+        { fun ctx -> TmCase($2 ctx, $4 ctx) }
   | AppTerm ASSIGN AppTerm
     { fun ctx -> TmAssign($1 ctx, $3 ctx) } ;
 
@@ -92,10 +95,7 @@ AppTerm:
 PathTerm:
   | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
   | PathTerm DOT IDENT { fun ctx -> TmProj($1 ctx, $3)}
-  | AscribeTerm        { $1 }
-  (* TODO: fix S/R conflict here *)
-  | CASE AscribeTerm OF Cases
-        { fun ctx -> TmCase($2 ctx, $4 ctx) } ;
+  | AscribeTerm        { $1 } ;
 
 AscribeTerm:
   | LT IDENT EQ term GT AS Type { fun ctx -> TmTag($2, $4 ctx, $7) }
@@ -126,8 +126,8 @@ ATerm:
   | UNIT                  { fun _ -> TmUnit } ;
 
 Cases:
-  | Case       { fun ctx -> [$1 ctx]}
-  | Case Cases { fun ctx -> ($1 ctx)::($2 ctx) } ;
+  | Case            { fun ctx -> [$1 ctx]}
+  | Case VBAR Cases { fun ctx -> ($1 ctx)::($3 ctx) } ;
 
 Case:
   (* TODO: replace ATerm with term without running into S/R conflicts *)

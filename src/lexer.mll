@@ -23,6 +23,7 @@ rule read =
   | "λ"      { LAMBDA }
   | "->"     { ARROW }
   | "=>"     { FATARROW }
+  | "|"      { VBAR }
   | "."      { DOT }
   | ","      { COMMA }
   | "("      { LPAREN }
