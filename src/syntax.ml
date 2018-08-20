@@ -1,6 +1,9 @@
 type ty =
   | TyBool
   | TyNat
+  | TyUnit
+  | TyRecord of (string * ty) list
+  | TyVariant of (string * ty) list
   | TyArr of ty * ty
 
 type term = 
@@ -14,6 +17,14 @@ type term =
   | TmSucc of term
   | TmPred of term
   | TmIsZero of term
+  | TmUnit
+  | TmLet of string * term * term
+  | TmRecord of (string * term) list
+  | TmProj of term * string
+  | TmAscribe of term * ty
+  | TmTag of string * term * ty
+  | TmCase of term * (string * (string * term)) list
+  | TmFix of term
 
 type binding =
   | NameBind
@@ -54,87 +65,16 @@ let rec isnumericval t = match t with
   | TmSucc(t1) -> isnumericval t1 
   | _ -> false
 
-let termShift d t =
-  let rec walk c t = match t with
-    | TmTrue -> TmTrue
-    | TmFalse -> TmFalse
-    | TmZero -> TmZero
-    | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
-    | TmSucc(t1) -> TmSucc(walk c t1)
-    | TmPred(t1) -> TmPred(walk c t1)
-    | TmIsZero(t1) -> TmIsZero(walk c t1)
-    | TmVar(x, n) -> if x >= c then TmVar(x + d, n + d) else TmVar(x, n + d)
-    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
-    | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
-  in walk 0 t
-
-(* [ j -> s ]t *)
-let termSubst j s t =
-  let rec walk c t = match t with
-    | TmTrue -> TmTrue
-    | TmFalse -> TmFalse
-    | TmZero -> TmZero
-    | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
-    | TmSucc(t1) -> TmSucc(walk c t1)
-    | TmPred(t1) -> TmPred(walk c t1)
-    | TmIsZero(t1) -> TmIsZero(walk c t1)
-    | TmVar(x, n) -> if x = j + c then termShift c s else TmVar(x, n)
-    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
-    | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
-  in walk 0 t
-
-let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
-
-let isval t = match t with
+let rec isval t = match t with
   | TmTrue -> true
   | TmFalse -> true
+  | TmUnit -> true
   | t when isnumericval t -> true
   | TmAbs(_, _, _) -> true
+  | TmRecord(fields) -> List.for_all isval (List.map (fun (_, f) -> f) fields)
+  | TmAscribe(t, _) -> isval t
+  | TmTag(_, t, _) -> isval t
   | _ -> false
-
-exception NoRuleApplies
-
-let rec printtm (ctx: context) (t: term) = match t with
-  | TmVar(i, n) ->
-      if ctxlength ctx = n then
-        let (n, _) = getbinding ctx i in n
-      else
-        "bad index"
-  | TmAbs(x, _, t) ->
-      let ctx', x' = pickfreshname ctx x in
-      ("λ" ^ x' ^ "." ^ printtm ctx' t)
-  | TmApp(t1, t2) -> printtm ctx t1 ^ " " ^ printtm ctx t2
-  | TmIf(t1, t2, t3) -> 
-      "if " ^ printtm ctx t1 ^
-      " then " ^ printtm ctx t2 ^
-      " else " ^ printtm ctx t3
-  | TmSucc(t) -> "succ " ^ printtm ctx t
-  | TmPred(t) -> "pred " ^ printtm ctx t
-  | TmIsZero(t) -> "iszero " ^ printtm ctx t
-  | TmTrue -> "true"
-  | TmFalse -> "false"
-  | TmZero -> "0"
-
-let rec evalStep t = match t with
-  | TmIf(TmTrue, t2, _) -> t2
-  | TmIf(TmFalse, _, t3) -> t3
-  | TmIf(t1, t2, t3) -> let t1' = evalStep t1 in TmIf(t1', t2, t3)
-  | TmSucc(t1) -> let t1' = evalStep t1 in TmSucc(t1')
-  | TmPred(TmZero) -> TmZero
-  | TmPred(TmSucc(nv1)) when (isnumericval nv1) -> nv1
-  | TmPred(t1) -> let t1' = evalStep t1 in TmPred(t1')
-  | TmIsZero(TmZero) -> TmTrue
-  | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
-  | TmIsZero(t1) -> let t1' = evalStep t1 in TmIsZero(t1')
-  | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
-  | TmApp(v1, t2) when isval v1 -> let t2' = evalStep t2 in TmApp(v1, t2')
-  | TmApp(t1, t2) -> let t1' = evalStep t1 in TmApp(t1', t2)
-  | _ -> raise NoRuleApplies
-
-let rec eval t =
-  try let t' = evalStep t
-    in eval t'
-  with NoRuleApplies -> t
 
 exception TypeError
 
@@ -142,6 +82,7 @@ let rec typeof (ctx: context) (t: term) = match t with
   | TmTrue -> TyBool
   | TmFalse -> TyBool
   | TmZero -> TyNat
+  | TmUnit -> TyUnit
   | TmPred(t1) when ((=) (typeof ctx t1) TyNat) -> TyNat
   | TmSucc(t1) when ((=) (typeof ctx t1) TyNat) -> TyNat
   | TmIsZero(t1) when ((=) (typeof ctx t1) TyNat) -> TyBool
@@ -160,11 +101,197 @@ let rec typeof (ctx: context) (t: term) = match t with
       let ty1 = typeof ctx t1 in
       let ty2 = typeof ctx t2 in
       (match ty1 with
-        | TyArr(ty11, ty12) -> if (=) ty11 ty2 then ty12 else (raise TypeError)
+        | TyArr(ty11, ty12) -> (if (=) ty11 ty2 then ty12 else (raise TypeError))
+        | _ -> raise TypeError)
+  | TmLet(x, t1, t2) ->
+      let ty1 = typeof ctx t1 in
+      let ctx' = addbinding ctx x (VarBind(ty1)) in
+      typeof ctx' t2
+  | TmRecord(fields) ->
+      TyRecord(List.map (fun (label, field) -> (label, (typeof ctx field))) fields)
+  | TmProj(t, l) ->
+      (match typeof ctx t with
+        | TyRecord(types) -> (try List.assoc l types with Not_found -> raise TypeError)
+        | _ -> raise TypeError)
+  | TmAscribe(t, ty) ->
+      let actual = typeof ctx t in
+      if (=) actual ty then ty else raise TypeError
+  | TmTag(label, t, (TyVariant(variants) as ty)) ->
+      let expected = try List.assoc label variants with Not_found -> raise TypeError in
+      if (=) expected (typeof ctx t) then ty else raise TypeError
+  | TmCase(t, cases) ->
+      (match typeof ctx t with
+        | TyVariant(variants) ->
+            let get_type (n, (x, t)) =
+              let variant_type = try
+                List.assoc n variants with
+                Not_found -> raise TypeError in
+              typeof (addbinding ctx x (VarBind(variant_type))) t in
+            let result_types = List.map get_type cases in
+            (* TODO: check that all result types are the same *)
+            (* non emptiness should be enforced by the parser *)
+            List.hd result_types
+        | _ -> raise TypeError) (* case statements only work on variants for now *)
+  | TmFix(t) ->
+      (match typeof ctx t with
+        | TyArr(ty1, ty2) -> if (=) ty1 ty2 then ty1 else raise TypeError
         | _ -> raise TypeError)
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
   | TyBool -> "Bool"
   | TyNat -> "Nat"
+  | TyUnit -> "Unit"
+  | TyRecord(tys) ->
+      let printfield (label, fieldty) = label ^ "=" ^ (printty fieldty) in
+      "{" ^ (String.concat ", " (List.map printfield tys)) ^ "}"
   | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2
+  | TyVariant(tys) ->
+      let printfield (label, fieldty) = label ^ ": " ^ (printty fieldty) in
+      "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
+
+let termShift d t =
+  let rec walk c t = match t with
+    | TmTrue -> TmTrue
+    | TmFalse -> TmFalse
+    | TmZero -> TmZero
+    | TmUnit -> TmUnit
+    | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
+    | TmSucc(t1) -> TmSucc(walk c t1)
+    | TmPred(t1) -> TmPred(walk c t1)
+    | TmIsZero(t1) -> TmIsZero(walk c t1)
+    | TmVar(x, n) -> if x >= c then TmVar(x + d, n + d) else TmVar(x, n + d)
+    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
+    | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
+    | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2) 
+    | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
+    | TmProj(t, l) -> TmProj(walk c t, l)
+    | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
+    | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
+    | TmCase(t, cases) ->
+        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
+        TmCase(walk c t, cases')
+    | TmFix(t) -> TmFix(walk c t)
+  in walk 0 t
+
+(* [ j -> s ]t *)
+let termSubst j s t =
+  let rec walk c t = match t with
+    | TmTrue -> TmTrue
+    | TmFalse -> TmFalse
+    | TmZero -> TmZero
+    | TmUnit -> TmUnit
+    | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
+    | TmSucc(t1) -> TmSucc(walk c t1)
+    | TmPred(t1) -> TmPred(walk c t1)
+    | TmIsZero(t1) -> TmIsZero(walk c t1)
+    | TmVar(x, n) -> if x = j + c then termShift c s else TmVar(x, n)
+    | TmAbs(x, ty, t) -> TmAbs(x, ty, walk (c + 1) t)
+    | TmApp(t1, t2) -> TmApp(walk c t1, walk c t2)
+    | TmLet(n, t1, t2) -> TmLet(n, walk c t1, walk (c+1) t2)
+    | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
+    | TmProj(t, l) -> TmProj(walk c t, l)
+    | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
+    | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
+    | TmCase(t, cases) ->
+        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
+        TmCase(walk c t, cases')
+    | TmFix(t) -> TmFix(walk c t)
+  in walk 0 t
+
+let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
+
+exception NoRuleApplies
+
+let rec printtm (ctx: context) (t: term) = match t with
+  | TmVar(i, n) ->
+      if ctxlength ctx = n then
+        let (n, _) = getbinding ctx i in n
+      else
+        "bad index"
+  | TmAbs(x, _, t) ->
+      let ctx', x' = pickfreshname ctx x in
+      ("λ" ^ x' ^ "." ^ printtm ctx' t)
+  | TmApp(t1, t2) -> printtm ctx t1 ^ " " ^ printtm ctx t2
+  | TmIf(t1, t2, t3) -> 
+      "if " ^ printtm ctx t1 ^
+      " then " ^ printtm ctx t2 ^
+      " else " ^ printtm ctx t3
+  | TmSucc(t) ->
+      let rec f n t = match t with
+        | TmZero -> string_of_int n
+        | TmSucc(s) -> f (n + 1) s
+        | _ -> "succ " ^ printtm ctx t
+      in f 1 t 
+  | TmPred(t) -> "pred " ^ printtm ctx t
+  | TmIsZero(t) -> "iszero " ^ printtm ctx t
+  | TmTrue -> "true"
+  | TmFalse -> "false"
+  | TmZero -> "0"
+  | TmUnit -> "unit"
+  | TmLet(n, t1, t2) ->
+      "let " ^ n ^ "=" ^
+      printtm ctx t1 ^ " in " ^
+      printtm (addbinding ctx n NameBind) t2
+  | TmRecord(fields) ->
+      let printfield (label, field) = label ^ "=" ^ printtm ctx field in
+      let fs = List.map printfield fields in
+      "{" ^ (String.concat "," fs) ^ "}"
+  | TmProj(t, l) -> printtm ctx t ^ "." ^ l
+  | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
+  | TmTag(s, t, _) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
+  | TmFix(t) -> "fix " ^ printtm ctx t
+  | _ -> "TODO"
+
+let rec evalStep ctx t = match t with
+  | TmIf(TmTrue, t2, _) -> t2
+  | TmIf(TmFalse, _, t3) -> t3
+  | TmIf(t1, t2, t3) -> let t1' = evalStep ctx t1 in TmIf(t1', t2, t3)
+  | TmSucc(t1) -> let t1' = evalStep ctx t1 in TmSucc(t1')
+  | TmPred(TmZero) -> TmZero
+  | TmPred(TmSucc(nv1)) when (isnumericval nv1) -> nv1
+  | TmPred(t1) -> let t1' = evalStep ctx t1 in TmPred(t1')
+  | TmIsZero(TmZero) -> TmTrue
+  | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
+  | TmIsZero(t1) -> let t1' = evalStep ctx t1 in TmIsZero(t1')
+  | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
+  | TmApp(v1, t2) when isval v1 -> let t2' = evalStep ctx t2 in TmApp(v1, t2')
+  | TmApp(t1, t2) -> let t1' = evalStep ctx t1 in TmApp(t1', t2)
+  | TmLet(_, v1, t2) when isval v1 -> termSubstTop v1 t2
+  | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2)
+  | TmRecord(fields) ->
+      let rec evalnextfield l = match l with
+        | [] -> raise NoRuleApplies
+        | (l,v)::fs when isval v -> let vs = evalnextfield fs in (l,v)::vs
+        | (l,f)::fs -> let v = evalStep ctx f in (l,v)::fs
+      in let fields' = evalnextfield fields in
+      TmRecord(fields')
+  | TmProj(TmRecord(fields) as t, l) when isval t ->
+      (try List.assoc l fields
+      with Not_found ->  raise NoRuleApplies)
+  | TmProj(t, l) -> 
+      if isval t
+      then raise NoRuleApplies
+      else let t' = evalStep ctx t in TmProj(t', l)
+  | TmAscribe(t, _) -> t
+  | TmCase(t, cases) when isval t ->
+      (match t with
+        | TmTag(label, value, _) ->
+            (let (_, case) =
+              try List.assoc label cases
+              with Not_found -> raise NoRuleApplies
+            in
+            termSubstTop value case)
+        | _ -> raise NoRuleApplies)
+  | TmCase(t, cases) -> let t' = evalStep ctx t in TmCase(t', cases)
+  | TmFix(t1) as t when isval t1 ->
+      (match t1 with
+        | TmAbs(_, _, t12) -> termSubstTop t t12
+        | _ -> raise NoRuleApplies)
+  | TmFix(t) -> let t' = evalStep ctx t in TmFix(t')
+  | _ -> raise NoRuleApplies
+
+let rec eval ctx t =
+  try let t' = evalStep ctx t
+    in eval ctx t'
+  with NoRuleApplies -> t

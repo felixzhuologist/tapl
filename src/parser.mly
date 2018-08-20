@@ -8,11 +8,16 @@ open Syntax
 %token DOT
 %token LPAREN
 %token RPAREN
+%token LCURLY
+%token RCURLY
+%token LT
+%token GT
+%token COMMA
 %token EOF
 
 %token TRUE
 %token FALSE
-%token ZERO
+%token <int> INTV
 
 %token IF
 %token THEN
@@ -21,10 +26,23 @@ open Syntax
 %token PRED
 %token ISZERO
 
-%token BOOL
-%token NAT
+%token TYBOOL
+%token TYNAT
 %token ARROW
+%token FATARROW
 %token COLON
+
+%token UNIT
+%token TYUNIT
+%token SEMICOLON
+%token AS
+%token LET
+%token LETREC
+%token EQ
+%token IN
+%token CASE
+%token OF
+%token FIX
 
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
@@ -43,27 +61,141 @@ term:
         let ctx1 = addbinding ctx $2 NameBind in
         TmAbs($2, $4, $6 ctx1) }
   | IF term THEN term ELSE term
-    { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) } ;
+    { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) }
+  | LET IDENT EQ term IN term
+    { fun ctx ->
+        let ctx1 = addbinding ctx $2 NameBind in
+        TmLet($2, $4 ctx, $6 ctx1) }
+  | LETREC IDENT COLON Type EQ term IN term
+    { fun ctx ->
+        let ctx1 = addbinding ctx $2 NameBind in
+        let recfunc = TmFix(TmAbs($2, $4, $6 ctx1)) in
+        TmLet($2, recfunc, $8 ctx1) } ;
 
 AppTerm:
-  | ATerm               { $1 }
-  | AppTerm ATerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
-  | SUCC ATerm          { fun ctx -> TmSucc($2 ctx) }
-  | PRED ATerm          { fun ctx -> TmPred($2 ctx) }
-  | ISZERO ATerm        { fun ctx -> TmIsZero($2 ctx) } ;
+  | PathTerm               { $1 }
+  | AppTerm PathTerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
+  | SUCC PathTerm          { fun ctx -> TmSucc($2 ctx) }
+  | PRED PathTerm          { fun ctx -> TmPred($2 ctx) }
+  | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) }
+  | FIX PathTerm           { fun ctx -> TmFix($2 ctx) } ;
+
+PathTerm:
+  | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
+  | PathTerm DOT IDENT { fun ctx -> TmProj($1 ctx, $3)}
+  | AscribeTerm        { $1 } ;
+  (* TODO: fix S/R conflict here *)
+  | CASE AscribeTerm OF Cases
+        { fun ctx -> TmCase($2 ctx, $4 ctx) }
+
+AscribeTerm:
+  | LT IDENT EQ term GT AS Type { fun ctx -> TmTag($2, $4 ctx, $7) }
+  | ATerm AS Type               { fun ctx -> TmAscribe($1 ctx, $3) }
+  | ATerm                       { $1 } ;
+
+TermSeq:
+  | term { $1 }
+  (* NOTE: using derived forms currently means that the derived form will 
+   * show up in cases where a term doesn't get evaluated (e.g. the body of a
+   * function: lambda x: Nat . (x as Nat) will eval to λx.λid.x x : Nat -> Nat) *)
+  | term SEMICOLON TermSeq
+    { fun ctx ->
+        let ctx1 = addbinding ctx "_" NameBind in
+        TmApp(TmAbs("_", TyUnit, $3 ctx1), $1 ctx) } ;
 
 ATerm:
-  | LPAREN term RPAREN    { $2 }
+  | LPAREN TermSeq RPAREN { $2 }
+  | LCURLY Fields RCURLY  { fun ctx -> TmRecord($2 ctx 1) }
   | IDENT                 { fun ctx -> TmVar(name2index ctx $1, ctxlength ctx) }
-  | ZERO                  { fun _ -> TmZero }
+  | INTV
+    { let rec f n = match n with
+          | 0 -> TmZero
+          | n -> TmSucc(f (n - 1))
+        in fun _ -> f $1 }
   | TRUE                  { fun _ -> TmTrue }
-  | FALSE                 { fun _ -> TmFalse } ;
+  | FALSE                 { fun _ -> TmFalse }
+  | UNIT                  { fun _ -> TmUnit } ;
+
+Cases:
+  | Case       { fun ctx -> [$1 ctx]}
+  | Case Cases { fun ctx -> ($1 ctx)::($2 ctx) } ;
+
+Case:
+  (* TODO: replace ATerm with term without running into S/R conflicts *)
+  | LT IDENT EQ IDENT GT FATARROW ATerm 
+      { fun ctx ->
+          let ctx1 = addbinding ctx $4 NameBind in
+          ($2, ($4, $7 ctx1)) } ;
+
+Fields:
+  | /* empty */
+    { fun _ _ -> [] }
+  | NEFields
+    { $1 } ;
+
+(* Take in an index in addition to the context to support implicit labels -
+ * if no label is provided, then we use the index as the label. This also
+ * means that tuples are implemented as records under the hood *)
+NEFields:
+  | Field                { fun ctx i -> [$1 ctx i] }
+  | Field COMMA NEFields 
+      (* overwrite field values for labels that already exist, which makes things like
+       * {a=1, a=2} evaluate to {a=2} *)
+      { fun ctx i ->
+          let (new_label, f) = ($1 ctx i) in
+          let existing_fields = ($3 ctx (i+1)) in
+          if List.mem_assoc new_label existing_fields then
+          existing_fields else
+          (new_label, f) :: existing_fields } ;
+
+Field:
+  | IDENT EQ term { fun ctx _ -> ($1, $3 ctx) }
+  | term          { fun ctx i -> (string_of_int i, $1 ctx) } ;
+
+(* type fields separated by = *)
+TypeFieldsEq:
+  | /* empty */
+    { [] }
+  | NETypeFieldsEq { $1 } ;
+
+NETypeFieldsEq:
+  | TypeFieldEq { [$1] } 
+  | TypeFieldEq COMMA NETypeFieldsEq
+      { let (new_label, ty) = $1 in
+        let existing_fields = $3 in
+        if List.mem_assoc new_label existing_fields then
+        existing_fields else
+        (new_label, ty) :: existing_fields } ;  
+
+TypeFieldEq:
+  | IDENT EQ Type { ($1, $3) } ;
+
+(* type fields separated by : *)
+TypeFieldsColon:
+  | /* empty */
+    { [] }
+  | NETypeFieldsColon { $1 } ;
+
+NETypeFieldsColon:
+  | TypeFieldColon { [$1] } 
+  | TypeFieldColon COMMA NETypeFieldsColon
+      { let (new_label, ty) = $1 in
+        let existing_fields = $3 in
+        if List.mem_assoc new_label existing_fields then
+        existing_fields else
+        (new_label, ty) :: existing_fields } ;  
+
+TypeFieldColon:
+  | IDENT COLON Type { ($1, $3) } ;
 
 Type:
   | AType            { $1 }
   | AType ARROW Type { TyArr($1, $3) } ;
 
 AType:
-  | LPAREN Type RPAREN { $2 }
-  | BOOL               { TyBool }
-  | NAT                { TyNat } ;
+  | LPAREN Type RPAREN         { $2 }
+  | LCURLY TypeFieldsEq RCURLY { TyRecord($2) }
+  | LT TypeFieldsColon GT      { TyVariant($2) }
+  | TYUNIT                     { TyUnit }
+  | TYBOOL                     { TyBool }
+  | TYNAT                      { TyNat } ;
