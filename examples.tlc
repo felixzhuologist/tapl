@@ -8,3 +8,4 @@ let ff = λie: Nat -> Bool . (λx: Nat . if iszero x then true else (if iszero (
 letrec iseven: Nat -> Bool = (λx: Nat . if iszero x then true else (if iszero (pred x) then false else iseven (pred (pred x)))) in iseven 7
 letrec plus: Nat -> Nat -> Nat = (λx: Nat . (λy: Nat . if iszero x then y else (plus (pred x) (succ y)))) in plus 3 4
 letrec equal: Nat -> Nat -> Bool = (λx: Nat . (λy: Nat . if iszero x then iszero y else (if iszero y then false else (equal (pred x) (pred y))))) in equal 10 10
+let x = ref 0 in (x := succ(!x); x := succ(!x); !x)

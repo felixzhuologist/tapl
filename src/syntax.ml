@@ -73,6 +73,11 @@ let extendstore store v = (List.length store, List.append store [v])
 
 let lookuploc store i = List.nth store i
 
+let rec updatestore store i v = match (i, store) with
+  | (0, (_::vs)) -> v :: vs
+  | (i, (v'::vs)) -> v' :: (updatestore vs (i-1) v)
+  | _ -> raise LookupFailure
+
 let rec isnumericval t = match t with
   | TmZero -> true
   | TmSucc(t1) -> isnumericval t1 
@@ -87,6 +92,7 @@ let rec isval t = match t with
   | TmRecord(fields) -> List.for_all isval (List.map (fun (_, f) -> f) fields)
   | TmAscribe(t, _) -> isval t
   | TmTag(_, t, _) -> isval t
+  | TmLoc(_) -> true
   | _ -> false
 
 exception TypeError
@@ -323,6 +329,24 @@ let rec evalStep ctx store t = match t with
         | _ -> raise NoRuleApplies)
   | TmFix(t) ->
       let (t', store') = evalStep ctx store t in TmFix(t'), store'
+  | TmRef(v) when isval v ->
+      let (loc, store') = extendstore store v in TmLoc(loc), store'
+  | TmRef(t) ->
+      let (t', store') = evalStep ctx store t in TmRef(t'), store'
+  | TmDeref(v) when isval v ->
+      (match v with
+        | TmLoc(loc) -> lookuploc store loc, store
+        | _ -> raise NoRuleApplies)
+  | TmDeref(t) ->
+      let (t', store') = evalStep ctx store t in TmDeref(t'), store' 
+  | TmAssign(v1, v2) when isval v1 && isval v2 ->
+      (match v1 with
+        | TmLoc(loc) -> TmUnit, (updatestore store loc v2)
+        | _ -> raise NoRuleApplies)
+  | TmAssign(v1, t2) when isval v1 ->
+      let (t2', store') = evalStep ctx store t2 in TmAssign(v1, t2'), store'
+  | TmAssign(t1, t2) ->
+      let (t1', store') = evalStep ctx store t1 in TmAssign(t1', t2), store'
   | _ -> raise NoRuleApplies
 
 let rec eval ctx store t =
