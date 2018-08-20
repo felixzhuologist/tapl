@@ -155,9 +155,15 @@ let rec typeof (ctx: context) (t: term) = match t with
       (match typeof ctx t with
         | TyArr(ty1, ty2) -> if (=) ty1 ty2 then ty1 else raise TypeError
         | _ -> raise TypeError)
-  | TmRef(_) | TmLoc(_) -> TyRef(TyUnit)
-  | TmAssign(_, _) -> TyUnit
-  | TmDeref(_) -> TyUnit
+  | TmRef(t) -> TyRef(typeof ctx t)
+  | TmAssign(t1, t2) ->
+      (match typeof ctx t1 with
+        | TyRef(ty) -> if (=) ty (typeof ctx t2) then TyUnit else raise TypeError
+        | _ -> raise TypeError)
+  | TmDeref(t) ->
+      (match typeof ctx t with
+        | TyRef(ty) -> ty
+        | _ -> raise TypeError)
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
