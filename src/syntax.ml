@@ -5,6 +5,7 @@ type ty =
   | TyRecord of (string * ty) list
   | TyVariant of (string * ty) list
   | TyArr of ty * ty
+  | TyRef of ty
 
 type term = 
   | TmVar of int * int
@@ -25,6 +26,10 @@ type term =
   | TmTag of string * term * ty
   | TmCase of term * (string * (string * term)) list
   | TmFix of term
+  | TmRef of term
+  | TmLoc of int
+  | TmDeref of term
+  | TmAssign of term * term
 
 type binding =
   | NameBind
@@ -60,6 +65,19 @@ let rec name2index (ctx: context) (x: string) =
     | [] -> raise LookupFailure
     | (y,_)::rest -> if y=x then 0 else 1 + (name2index rest x)
 
+type store = term list
+
+let (emptystore: store) = []
+
+let extendstore store v = (List.length store, List.append store [v])
+
+let lookuploc store i = List.nth store i
+
+let rec updatestore store i v = match (i, store) with
+  | (0, (_::vs)) -> v :: vs
+  | (i, (v'::vs)) -> v' :: (updatestore vs (i-1) v)
+  | _ -> raise LookupFailure
+
 let rec isnumericval t = match t with
   | TmZero -> true
   | TmSucc(t1) -> isnumericval t1 
@@ -74,6 +92,7 @@ let rec isval t = match t with
   | TmRecord(fields) -> List.for_all isval (List.map (fun (_, f) -> f) fields)
   | TmAscribe(t, _) -> isval t
   | TmTag(_, t, _) -> isval t
+  | TmLoc(_) -> true
   | _ -> false
 
 exception TypeError
@@ -136,6 +155,15 @@ let rec typeof (ctx: context) (t: term) = match t with
       (match typeof ctx t with
         | TyArr(ty1, ty2) -> if (=) ty1 ty2 then ty1 else raise TypeError
         | _ -> raise TypeError)
+  | TmRef(t) -> TyRef(typeof ctx t)
+  | TmAssign(t1, t2) ->
+      (match typeof ctx t1 with
+        | TyRef(ty) -> if (=) ty (typeof ctx t2) then TyUnit else raise TypeError
+        | _ -> raise TypeError)
+  | TmDeref(t) ->
+      (match typeof ctx t with
+        | TyRef(ty) -> ty
+        | _ -> raise TypeError)
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
@@ -149,6 +177,7 @@ let rec printty ty = match ty with
   | TyVariant(tys) ->
       let printfield (label, fieldty) = label ^ ": " ^ (printty fieldty) in
       "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
+  | TyRef(ty) -> "Ref " ^ printty ty
 
 let termShift d t =
   let rec walk c t = match t with
@@ -172,6 +201,10 @@ let termShift d t =
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
     | TmFix(t) -> TmFix(walk c t)
+    | TmRef(t) -> TmRef(walk c t)
+    | TmLoc(_) as t -> t
+    | TmDeref(t) -> TmDeref(walk c t)
+    | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -197,6 +230,10 @@ let termSubst j s t =
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
     | TmFix(t) -> TmFix(walk c t)
+    | TmRef(t) -> TmRef(walk c t)
+    | TmLoc(_) as t -> t
+    | TmDeref(t) -> TmDeref(walk c t)
+    | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -241,39 +278,46 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
   | TmTag(s, t, _) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
   | TmFix(t) -> "fix " ^ printtm ctx t
+  | TmRef(t) -> "ref " ^ printtm ctx t
+  | TmLoc(i) -> "<loc #" ^ string_of_int i ^ ">"
   | _ -> "TODO"
 
-let rec evalStep ctx t = match t with
-  | TmIf(TmTrue, t2, _) -> t2
-  | TmIf(TmFalse, _, t3) -> t3
-  | TmIf(t1, t2, t3) -> let t1' = evalStep ctx t1 in TmIf(t1', t2, t3)
-  | TmSucc(t1) -> let t1' = evalStep ctx t1 in TmSucc(t1')
-  | TmPred(TmZero) -> TmZero
-  | TmPred(TmSucc(nv1)) when (isnumericval nv1) -> nv1
-  | TmPred(t1) -> let t1' = evalStep ctx t1 in TmPred(t1')
-  | TmIsZero(TmZero) -> TmTrue
-  | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse
-  | TmIsZero(t1) -> let t1' = evalStep ctx t1 in TmIsZero(t1')
-  | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t
-  | TmApp(v1, t2) when isval v1 -> let t2' = evalStep ctx t2 in TmApp(v1, t2')
-  | TmApp(t1, t2) -> let t1' = evalStep ctx t1 in TmApp(t1', t2)
-  | TmLet(_, v1, t2) when isval v1 -> termSubstTop v1 t2
-  | TmLet(n, t1, t2) -> let t1' = evalStep ctx t1 in TmLet(n, t1', t2)
+let rec evalStep ctx store t = match t with
+  | TmIf(TmTrue, t2, _) -> t2, store
+  | TmIf(TmFalse, _, t3) -> t3, store
+  | TmIf(t1, t2, t3) ->
+      let (t1', store') = evalStep ctx store t1 in TmIf(t1', t2, t3), store'
+  | TmSucc(t1) ->
+      let (t1', store') = evalStep ctx store t1 in TmSucc(t1'), store'
+  | TmPred(TmZero) -> TmZero, store
+  | TmPred(TmSucc(nv1)) when (isnumericval nv1) -> nv1, store
+  | TmPred(t1) ->
+      let (t1', store') = evalStep ctx store t1 in TmPred(t1'), store'
+  | TmIsZero(TmZero) -> TmTrue, store
+  | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse, store
+  | TmIsZero(t1) ->
+      let (t1', store') = evalStep ctx store t1 in TmIsZero(t1'), store'
+  | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t, store
+  | TmApp(v1, t2) when isval v1 ->
+      let (t2', store') = evalStep ctx store t2 in TmApp(v1, t2'), store'
+  | TmApp(t1, t2) ->
+      let (t1', store') = evalStep ctx store t1 in TmApp(t1', t2), store'
+  | TmLet(_, v1, t2) when isval v1 -> termSubstTop v1 t2, store
+  | TmLet(n, t1, t2) ->
+      let (t1', store') = evalStep ctx store t1 in TmLet(n, t1', t2), store'
   | TmRecord(fields) ->
       let rec evalnextfield l = match l with
         | [] -> raise NoRuleApplies
-        | (l,v)::fs when isval v -> let vs = evalnextfield fs in (l,v)::vs
-        | (l,f)::fs -> let v = evalStep ctx f in (l,v)::fs
-      in let fields' = evalnextfield fields in
-      TmRecord(fields')
+        | (l,v)::fs when isval v -> let (vs, s) = evalnextfield fs in ((l,v)::vs, s)
+        | (l,f)::fs -> let (v, s) = evalStep ctx store f in ((l,v)::fs, s)
+      in let (fields', store') = evalnextfield fields in
+      TmRecord(fields'), store'
   | TmProj(TmRecord(fields) as t, l) when isval t ->
-      (try List.assoc l fields
+      (try List.assoc l fields, store
       with Not_found ->  raise NoRuleApplies)
-  | TmProj(t, l) -> 
-      if isval t
-      then raise NoRuleApplies
-      else let t' = evalStep ctx t in TmProj(t', l)
-  | TmAscribe(t, _) -> t
+  | TmProj(t, l) ->
+      let (t', store') = evalStep ctx store t in TmProj(t', l), store'
+  | TmAscribe(t, _) -> t, store
   | TmCase(t, cases) when isval t ->
       (match t with
         | TmTag(label, value, _) ->
@@ -281,17 +325,37 @@ let rec evalStep ctx t = match t with
               try List.assoc label cases
               with Not_found -> raise NoRuleApplies
             in
-            termSubstTop value case)
+            termSubstTop value case), store
         | _ -> raise NoRuleApplies)
-  | TmCase(t, cases) -> let t' = evalStep ctx t in TmCase(t', cases)
+  | TmCase(t, cases) ->
+      let (t', store') = evalStep ctx store t in TmCase(t', cases), store'
   | TmFix(t1) as t when isval t1 ->
       (match t1 with
-        | TmAbs(_, _, t12) -> termSubstTop t t12
+        | TmAbs(_, _, t12) -> termSubstTop t t12, store
         | _ -> raise NoRuleApplies)
-  | TmFix(t) -> let t' = evalStep ctx t in TmFix(t')
+  | TmFix(t) ->
+      let (t', store') = evalStep ctx store t in TmFix(t'), store'
+  | TmRef(v) when isval v ->
+      let (loc, store') = extendstore store v in TmLoc(loc), store'
+  | TmRef(t) ->
+      let (t', store') = evalStep ctx store t in TmRef(t'), store'
+  | TmDeref(v) when isval v ->
+      (match v with
+        | TmLoc(loc) -> lookuploc store loc, store
+        | _ -> raise NoRuleApplies)
+  | TmDeref(t) ->
+      let (t', store') = evalStep ctx store t in TmDeref(t'), store' 
+  | TmAssign(v1, v2) when isval v1 && isval v2 ->
+      (match v1 with
+        | TmLoc(loc) -> TmUnit, (updatestore store loc v2)
+        | _ -> raise NoRuleApplies)
+  | TmAssign(v1, t2) when isval v1 ->
+      let (t2', store') = evalStep ctx store t2 in TmAssign(v1, t2'), store'
+  | TmAssign(t1, t2) ->
+      let (t1', store') = evalStep ctx store t1 in TmAssign(t1', t2), store'
   | _ -> raise NoRuleApplies
 
-let rec eval ctx t =
-  try let t' = evalStep ctx t
-    in eval ctx t'
-  with NoRuleApplies -> t
+let rec eval ctx store t =
+  try let (t', store') = evalStep ctx store t
+    in eval ctx store' t'
+  with NoRuleApplies -> t, store

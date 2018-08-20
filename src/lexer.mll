@@ -19,9 +19,11 @@ rule read =
   | "Bool"   { TYBOOL }
   | "Nat"    { TYNAT }
   | "Unit"   { TYUNIT }
+  | "Ref"    { TYREF }
   | "λ"      { LAMBDA }
   | "->"     { ARROW }
   | "=>"     { FATARROW }
+  | "|"      { VBAR }
   | "."      { DOT }
   | ","      { COMMA }
   | "("      { LPAREN }
@@ -33,6 +35,8 @@ rule read =
   | ":"      { COLON }
   | ";"      { SEMICOLON }
   | "="      { EQ }
+  | ":="     { ASSIGN }
+  | "!"      { BANG }
   | "if"     { IF }
   | "then"   { THEN }
   | "else"   { ELSE }
@@ -48,6 +52,7 @@ rule read =
   | "case"   { CASE }
   | "of"     { OF }
   | "fix"    { FIX }
+  | "ref"    { REF }
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }
