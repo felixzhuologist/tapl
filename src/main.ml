@@ -1,7 +1,9 @@
+open Context
 open Format
 open Lexer
 open Lexing
-open Syntax
+open Print
+open Store
 
 let line_stream_of_channel channel =
   Stream.from (fun _ -> try Some (input_line channel) with End_of_file -> None)
@@ -10,13 +12,13 @@ let process_line line =
   try
     let lexbuf = Lexing.from_string line in
     let ast = (Parser.toplevel Lexer.read lexbuf) emptycontext in
-    let (result, _) = eval emptycontext emptystore ast in
-    let ty = typeof emptycontext ast in
+    let (result, _) = Eval.eval emptycontext emptystore ast in
+    let ty = Types.typeof emptycontext ast in
     print_endline ((printtm emptycontext result) ^ " : " ^ (printty ty))
   with
     | SyntaxError msg -> prerr_endline msg
     | Parser.Error -> prerr_endline "Parsing error"
-    | Syntax.TypeError -> prerr_endline "Type error"
+    | Types.TypeError -> prerr_endline "Type error"
 
 let _ =
   if (Array.length Sys.argv) > 1 then

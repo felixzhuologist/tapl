@@ -1,5 +1,6 @@
 %{
 open Syntax
+open Context
 %}
 
 %token <string> IDENT
@@ -51,7 +52,7 @@ open Syntax
 %token TYREF
 
 %start toplevel
-%type <Syntax.context -> Syntax.term> toplevel
+%type <Context.context -> Syntax.term> toplevel
 
 %%
 toplevel:
