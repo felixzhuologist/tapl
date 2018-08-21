@@ -30,6 +30,8 @@ type term =
   | TmLoc of int
   | TmDeref of term
   | TmAssign of term * term
+  | TmError
+  | TmTry of term * term
 
 type binding =
   | NameBind
@@ -164,6 +166,7 @@ let rec typeof (ctx: context) (t: term) = match t with
       (match typeof ctx t with
         | TyRef(ty) -> ty
         | _ -> raise TypeError)
+  | TmTry(TmError, t) -> typeof ctx t
   | _ -> raise TypeError
 
 let rec printty ty = match ty with
@@ -185,6 +188,7 @@ let termShift d t =
     | TmFalse -> TmFalse
     | TmZero -> TmZero
     | TmUnit -> TmUnit
+    | TmError -> TmError
     | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
     | TmSucc(t1) -> TmSucc(walk c t1)
     | TmPred(t1) -> TmPred(walk c t1)
@@ -205,6 +209,7 @@ let termShift d t =
     | TmLoc(_) as t -> t
     | TmDeref(t) -> TmDeref(walk c t)
     | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
+    | TmTry(t1, t2) -> TmTry(walk c t1, walk c t2)
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -214,6 +219,7 @@ let termSubst j s t =
     | TmFalse -> TmFalse
     | TmZero -> TmZero
     | TmUnit -> TmUnit
+    | TmError -> TmError
     | TmIf(t1, t2, t3) -> TmIf(walk c t1, walk c t2, walk c t3)
     | TmSucc(t1) -> TmSucc(walk c t1)
     | TmPred(t1) -> TmPred(walk c t1)
@@ -234,6 +240,7 @@ let termSubst j s t =
     | TmLoc(_) as t -> t
     | TmDeref(t) -> TmDeref(walk c t)
     | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
+    | TmTry(t1, t2) -> TmTry(walk c t1, walk c t2)
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -280,32 +287,43 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmFix(t) -> "fix " ^ printtm ctx t
   | TmRef(t) -> "ref " ^ printtm ctx t
   | TmLoc(i) -> "<loc #" ^ string_of_int i ^ ">"
+  | TmError -> "error"
+  | TmTry(t1, t2) -> "try " ^ printtm ctx t1 ^ " with " ^ printtm ctx t2
   | _ -> "TODO"
 
 let rec evalStep ctx store t = match t with
   | TmIf(TmTrue, t2, _) -> t2, store
   | TmIf(TmFalse, _, t3) -> t3, store
+  | TmIf(TmError, _, _) -> TmError, store
   | TmIf(t1, t2, t3) ->
       let (t1', store') = evalStep ctx store t1 in TmIf(t1', t2, t3), store'
+  | TmSucc(TmError) -> TmError, store
   | TmSucc(t1) ->
       let (t1', store') = evalStep ctx store t1 in TmSucc(t1'), store'
   | TmPred(TmZero) -> TmZero, store
+  | TmPred(TmError) -> TmError, store
   | TmPred(TmSucc(nv1)) when (isnumericval nv1) -> nv1, store
   | TmPred(t1) ->
       let (t1', store') = evalStep ctx store t1 in TmPred(t1'), store'
   | TmIsZero(TmZero) -> TmTrue, store
+  | TmIsZero(TmError) -> TmError, store
   | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse, store
   | TmIsZero(t1) ->
       let (t1', store') = evalStep ctx store t1 in TmIsZero(t1'), store'
+  | TmApp(TmError, _) -> TmError, store
   | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t, store
   | TmApp(v1, t2) when isval v1 ->
-      let (t2', store') = evalStep ctx store t2 in TmApp(v1, t2'), store'
+      (match t2 with
+        | TmError -> TmError, store
+        | _ -> let (t2', store') = evalStep ctx store t2 in TmApp(v1, t2'), store')
   | TmApp(t1, t2) ->
       let (t1', store') = evalStep ctx store t1 in TmApp(t1', t2), store'
+  | TmLet(_, TmError, _) -> TmError, store
   | TmLet(_, v1, t2) when isval v1 -> termSubstTop v1 t2, store
   | TmLet(n, t1, t2) ->
       let (t1', store') = evalStep ctx store t1 in TmLet(n, t1', t2), store'
   | TmRecord(fields) ->
+      (* TODO: short circuit on error *)
       let rec evalnextfield l = match l with
         | [] -> raise NoRuleApplies
         | (l,v)::fs when isval v -> let (vs, s) = evalnextfield fs in ((l,v)::vs, s)
@@ -317,6 +335,7 @@ let rec evalStep ctx store t = match t with
       with Not_found ->  raise NoRuleApplies)
   | TmProj(t, l) ->
       let (t', store') = evalStep ctx store t in TmProj(t', l), store'
+  | TmAscribe(TmError, _) -> TmError, store
   | TmAscribe(t, _) -> t, store
   | TmCase(t, cases) when isval t ->
       (match t with
@@ -329,22 +348,26 @@ let rec evalStep ctx store t = match t with
         | _ -> raise NoRuleApplies)
   | TmCase(t, cases) ->
       let (t', store') = evalStep ctx store t in TmCase(t', cases), store'
+  | TmFix(TmError) -> TmError, store
   | TmFix(t1) as t when isval t1 ->
       (match t1 with
         | TmAbs(_, _, t12) -> termSubstTop t t12, store
         | _ -> raise NoRuleApplies)
   | TmFix(t) ->
       let (t', store') = evalStep ctx store t in TmFix(t'), store'
+  | TmRef(TmError) -> TmError, store
   | TmRef(v) when isval v ->
       let (loc, store') = extendstore store v in TmLoc(loc), store'
   | TmRef(t) ->
       let (t', store') = evalStep ctx store t in TmRef(t'), store'
+  | TmDeref(TmError) -> TmError, store
   | TmDeref(v) when isval v ->
       (match v with
         | TmLoc(loc) -> lookuploc store loc, store
         | _ -> raise NoRuleApplies)
   | TmDeref(t) ->
       let (t', store') = evalStep ctx store t in TmDeref(t'), store' 
+  | TmAssign(TmError, _) | TmAssign(_, TmError) -> TmError, store
   | TmAssign(v1, v2) when isval v1 && isval v2 ->
       (match v1 with
         | TmLoc(loc) -> TmUnit, (updatestore store loc v2)
@@ -353,6 +376,10 @@ let rec evalStep ctx store t = match t with
       let (t2', store') = evalStep ctx store t2 in TmAssign(v1, t2'), store'
   | TmAssign(t1, t2) ->
       let (t1', store') = evalStep ctx store t1 in TmAssign(t1', t2), store'
+  | TmTry(TmError, t2) -> t2, store
+  | TmTry(v1, _) when isval v1 -> v1, store
+  | TmTry(t1, t2) ->
+      let (t1', store') = evalStep ctx store t1 in TmTry(t1', t2), store'
   | _ -> raise NoRuleApplies
 
 let rec eval ctx store t =

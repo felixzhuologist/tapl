@@ -53,6 +53,9 @@ rule read =
   | "of"     { OF }
   | "fix"    { FIX }
   | "ref"    { REF }
+  | "error"  { ERROR }
+  | "try"    { TRY }
+  | "with"   { WITH }
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }

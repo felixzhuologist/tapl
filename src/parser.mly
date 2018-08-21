@@ -50,6 +50,10 @@ open Syntax
 %token ASSIGN
 %token TYREF
 
+%token ERROR
+%token TRY
+%token WITH
+
 %start toplevel
 %type <Syntax.context -> Syntax.term> toplevel
 
@@ -80,7 +84,9 @@ term:
   | CASE term OF Cases
         { fun ctx -> TmCase($2 ctx, $4 ctx) }
   | AppTerm ASSIGN AppTerm
-    { fun ctx -> TmAssign($1 ctx, $3 ctx) } ;
+    { fun ctx -> TmAssign($1 ctx, $3 ctx) }
+  | TRY term WITH term
+    { fun ctx -> TmTry($2 ctx, $4 ctx) } ;
 
 AppTerm:
   | PathTerm               { $1 }
@@ -123,7 +129,8 @@ ATerm:
         in fun _ -> f $1 }
   | TRUE                  { fun _ -> TmTrue }
   | FALSE                 { fun _ -> TmFalse }
-  | UNIT                  { fun _ -> TmUnit } ;
+  | UNIT                  { fun _ -> TmUnit }
+  | ERROR                 { fun _ -> TmError } ;
 
 Cases:
   | Case            { fun ctx -> [$1 ctx]}
