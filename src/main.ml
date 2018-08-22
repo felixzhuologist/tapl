@@ -8,9 +8,23 @@ open Store
 let line_stream_of_channel channel =
   Stream.from (fun _ -> try Some (input_line channel) with End_of_file -> None)
 
-let process_line line =
+let paragraphs lines =
+    let rec next para_lines i =
+      match Stream.peek lines, para_lines with
+      | None, [] -> None
+      | Some "", [] ->
+          Stream.junk lines;
+          next para_lines i
+      | Some "", _ | None, _ ->
+          Some (String.concat "\n" (List.rev para_lines))
+      | Some line, _ ->
+          Stream.junk lines;
+          next (line :: para_lines) i in
+    Stream.from (next []);;
+
+let process_term s =
   try
-    let lexbuf = Lexing.from_string line in
+    let lexbuf = Lexing.from_string s in
     let ast = (Parser.toplevel Lexer.read lexbuf) emptycontext in
     let (result, _) = Eval.eval emptycontext emptystore ast in
     let ty = Types.typeof emptycontext ast in
@@ -25,8 +39,8 @@ let _ =
     let f = open_in Sys.argv.(1) in
     try
       Stream.iter
-        (fun line -> print_endline ("> " ^ line); process_line line)
-        (line_stream_of_channel f);
+        (fun para -> process_term para)
+        (paragraphs (line_stream_of_channel f));
       close_in f
     with e ->
       close_in f;
@@ -36,5 +50,5 @@ let _ =
       output_string stdout "> ";
       flush stdout;
       let line = input_line stdin in
-      process_line line
+      process_term line
     done

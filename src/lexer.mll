@@ -5,7 +5,7 @@ open Parser
 exception SyntaxError of string
 }
 
-let white = [' ' '\t']+
+let white = [' ' '\t' '\n']+
 
 let ident = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
 
