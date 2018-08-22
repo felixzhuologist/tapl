@@ -14,7 +14,7 @@ let rec isval t = match t with
   | TmAbs(_, _, _) -> true
   | TmRecord(fields) -> List.for_all isval (List.map (fun (_, f) -> f) fields)
   | TmAscribe(t, _) -> isval t
-  | TmTag(_, t, _) -> isval t
+  | TmTag(_, t) -> isval t
   | TmLoc(_) -> true
   | _ -> false
 
@@ -35,7 +35,7 @@ let termShift d t =
     | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
     | TmProj(t, l) -> TmProj(walk c t, l)
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
-    | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
+    | TmTag(s, t) -> TmTag(s, walk c t)
     | TmCase(t, cases) ->
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
@@ -64,7 +64,7 @@ let termSubst j s t =
     | TmRecord(fields) -> TmRecord(List.map (fun (l, f) -> (l, walk c f)) fields)
     | TmProj(t, l) -> TmProj(walk c t, l)
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
-    | TmTag(s, t, ty) -> TmTag(s, walk c t, ty)
+    | TmTag(s, t) -> TmTag(s, walk c t)
     | TmCase(t, cases) ->
         let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
         TmCase(walk c t, cases')
@@ -117,7 +117,7 @@ let rec evalStep ctx store t = match t with
   | TmAscribe(t, _) -> t, store
   | TmCase(t, cases) when isval t ->
       (match t with
-        | TmTag(label, value, _) ->
+        | TmTag(label, value) ->
             (let (_, case) =
               try List.assoc label cases
               with Not_found -> raise NoRuleApplies

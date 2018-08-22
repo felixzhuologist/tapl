@@ -2,10 +2,14 @@
 let x = {1, true, 3} in x.2
 {a=1, a=2}.a
 {a=1} as {a=Nat}
-<none=unit> as <none: Unit, some: Nat>
-case (<some=3> as <none: Unit, some: Nat>) of <none=x> => 0 | <some=x> => x
+<none=unit>
+(<none=unit>) as <none: Unit, some: Nat>
+case <some=3> of <none=x> => 0 | <some=x> => x
 let ff = λie: Nat -> Bool . (λx: Nat . if iszero x then true else (if iszero (pred x) then false else ie (pred (pred x)))) in let iseven = fix ff in iseven 6
 letrec iseven: Nat -> Bool = (λx: Nat . if iszero x then true else (if iszero (pred x) then false else iseven (pred (pred x)))) in iseven 7
 letrec plus: Nat -> Nat -> Nat = (λx: Nat . (λy: Nat . if iszero x then y else (plus (pred x) (succ y)))) in plus 3 4
 letrec equal: Nat -> Nat -> Bool = (λx: Nat . (λy: Nat . if iszero x then iszero y else (if iszero y then false else (equal (pred x) (pred y))))) in equal 10 10
 let x = ref 0 in (x := succ(!x); x := succ(!x); !x)
+(lambda x: {a=Nat} . x.a) {a=1, b=2}
+{a=1, b=2} as {b=Nat, a=Nat}
+(lambda x: {a=Nat} . {a=x.a, c=10}) as ({a=Nat, b=Nat} -> {c=Nat})

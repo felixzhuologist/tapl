@@ -23,7 +23,7 @@ type term =
   | TmRecord of (string * term) list
   | TmProj of term * string
   | TmAscribe of term * ty
-  | TmTag of string * term * ty
+  | TmTag of string * term
   | TmCase of term * (string * (string * term)) list
   | TmFix of term
   | TmRef of term
