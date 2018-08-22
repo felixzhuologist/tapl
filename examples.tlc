@@ -13,3 +13,4 @@ let x = ref 0 in (x := succ(!x); x := succ(!x); !x)
 (lambda x: {a=Nat} . x.a) {a=1, b=2}
 {a=1, b=2} as {b=Nat, a=Nat}
 (lambda x: {a=Nat} . {a=x.a, c=10}) as ({a=Nat, b=Nat} -> {c=Nat})
+if true then {a=1} else {a=1, b=2}

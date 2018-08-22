@@ -2,6 +2,7 @@ open Context
 open Syntax
 
 exception TypeError
+exception NotImplemented
 
 let rec (<:) ty1 ty2 =
   (=) ty1 ty2 ||
@@ -24,6 +25,11 @@ let rec (<:) ty1 ty2 =
         List.for_all depthsub fields1
     | _ -> false
 
+let join ty1 ty2 =
+  if ty1 <: ty2 then ty2 else
+  if ty2 <: ty1 then ty1 else
+  raise NotImplemented
+
 let rec typeof (ctx: context) (t: term) = match t with
   | TmTrue -> TyBool
   | TmFalse -> TyBool
@@ -35,7 +41,7 @@ let rec typeof (ctx: context) (t: term) = match t with
   | TmIf(t1, t2, t3) ->
       let ty2 = typeof ctx t2 in
       let ty3 = typeof ctx t3 in
-      if (=) ty2 ty3 && (=) (typeof ctx t1) TyBool then ty2 else (raise TypeError)
+      if (=) (typeof ctx t1) TyBool then join ty2 ty3 else (raise TypeError)
   | TmVar(i, _) -> (match getbinding ctx i with
       | (_, NameBind) -> raise TypeError
       | (_, VarBind(ty)) -> ty)
