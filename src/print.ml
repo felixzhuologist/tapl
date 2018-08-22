@@ -50,7 +50,7 @@ let rec printtm (ctx: context) (t: term) = match t with
       "{" ^ (String.concat "," fs) ^ "}"
   | TmProj(t, l) -> printtm ctx t ^ "." ^ l
   | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
-  | TmTag(s, t, _) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
+  | TmTag(s, t) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
   | TmFix(t) -> "fix " ^ printtm ctx t
   | TmRef(t) -> "ref " ^ printtm ctx t
   | TmLoc(i) -> "<loc #" ^ string_of_int i ^ ">"

@@ -84,14 +84,15 @@ term:
     { fun ctx -> TmAssign($1 ctx, $3 ctx) } ;
 
 AppTerm:
-  | PathTerm               { $1 }
-  | AppTerm PathTerm       { fun ctx -> TmApp($1 ctx, $2 ctx) }
-  | SUCC PathTerm          { fun ctx -> TmSucc($2 ctx) }
-  | PRED PathTerm          { fun ctx -> TmPred($2 ctx) }
-  | ISZERO PathTerm        { fun ctx -> TmIsZero($2 ctx) }
-  | FIX PathTerm           { fun ctx -> TmFix($2 ctx) }
-  | REF PathTerm           { fun ctx -> TmRef($2 ctx) }
-  | BANG PathTerm          { fun ctx -> TmDeref($2 ctx) } ;
+  | PathTerm                { $1 }
+  | AppTerm PathTerm        { fun ctx -> TmApp($1 ctx, $2 ctx) }
+  | SUCC PathTerm           { fun ctx -> TmSucc($2 ctx) }
+  | PRED PathTerm           { fun ctx -> TmPred($2 ctx) }
+  | ISZERO PathTerm         { fun ctx -> TmIsZero($2 ctx) }
+  | FIX PathTerm            { fun ctx -> TmFix($2 ctx) }
+  | REF PathTerm            { fun ctx -> TmRef($2 ctx) }
+  | BANG PathTerm           { fun ctx -> TmDeref($2 ctx) } ;
+  | LT IDENT EQ PathTerm GT { fun ctx -> TmTag($2, $4 ctx) }
 
 PathTerm:
   | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
@@ -99,7 +100,6 @@ PathTerm:
   | AscribeTerm        { $1 } ;
 
 AscribeTerm:
-  | LT IDENT EQ term GT AS Type { fun ctx -> TmTag($2, $4 ctx, $7) }
   | ATerm AS Type               { fun ctx -> TmAscribe($1 ctx, $3) }
   | ATerm                       { $1 } ;
 
