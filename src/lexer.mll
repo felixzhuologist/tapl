@@ -21,7 +21,6 @@ rule read =
   | "Unit"   { TYUNIT }
   | "Ref"    { TYREF }
   | "Top"    { TYTOP }
-  | "Bot"    { TYBOT }
   | "λ"      { LAMBDA }
   | "->"     { ARROW }
   | "=>"     { FATARROW }

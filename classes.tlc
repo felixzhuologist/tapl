@@ -1,0 +1,59 @@
+let x = ref 1 in
+let Counter = {
+  get = λ _ : Unit . !x,
+  inc = λ _ : Unit . x := succ(!x)
+} in (
+Counter.inc unit;
+Counter.inc unit;
+Counter.get unit)
+
+let newCounter =
+  λ _: Unit .
+    let x = ref 1 in {
+      get = λ _ : Unit . !x,
+      inc = λ _ : Unit . x := succ(!x)      
+    }
+in
+let newResetCounter = 
+  λ _: Unit .
+    let x = ref 1 in {
+      get = λ _ : Unit . !x,
+      inc = λ _ : Unit . x := succ(!x) ,
+      reset = λ _ : Unit . x := 1
+    }
+in
+(newResetCounter unit) as {get=Unit -> Nat, inc=Unit -> Unit}
+
+let counterClass =
+  λ r: {x=Ref Nat} . {
+    get = λ _: Unit . !(r.x),
+    inc = λ _: Unit . r.x := succ(!(r.x))
+  }
+in
+let newCounter =
+  λ _: Unit . let r = {x=ref 1} in (counterClass r)
+in
+let resetCounterClass =
+  λ r: {x=Ref Nat} .
+    let super = counterClass r in {
+      get = super.get,
+      inc = super.inc,
+      reset = λ _ : Unit . r.x := 1
+    }
+in
+let newResetCounter =
+  λ _: Unit . let r = {x=ref 1} in (resetCounterClass r)
+in
+let backCounterClass =
+  λ r: {x=Ref Nat, last_backup=Ref Nat} .
+    let super = resetCounterClass r in {
+      get = super.get,
+      inc = super.inc,
+      reset = λ _ : Unit . r.x := !(r.last_backup),
+      backup = λ _ : Unit . r.last_backup := !(r.x)
+    }
+in let counter = newResetCounter unit in (
+counter.inc unit;
+counter.inc unit;
+counter.reset unit;
+counter.get unit)

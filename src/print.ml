@@ -54,5 +54,7 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmTag(s, t) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
   | TmFix(t) -> "fix " ^ printtm ctx t
   | TmRef(t) -> "ref " ^ printtm ctx t
+  | TmDeref(t) -> "!" ^ printtm ctx t
+  | TmAssign(t1, t2) -> printtm ctx t1 ^ " := " ^ printtm ctx t2
   | TmLoc(i) -> "<loc #" ^ string_of_int i ^ ">"
   | _ -> "TODO"
