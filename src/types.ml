@@ -2,7 +2,6 @@ open Context
 open Syntax
 
 exception TypeError
-exception NotImplemented
 
 let rec (<:) ty1 ty2 =
   (=) ty1 ty2 ||
@@ -23,12 +22,14 @@ let rec (<:) ty1 ty2 =
           with Not_found -> false
         in
         List.for_all depthsub fields1
+    | (_, TyTop) -> true
     | _ -> false
 
 let join ty1 ty2 =
   if ty1 <: ty2 then ty2 else
   if ty2 <: ty1 then ty1 else
-  raise NotImplemented
+  (* TODO: joins for records, functions, variants *)
+  TyTop
 
 let rec typeof (ctx: context) (t: term) = match t with
   | TmTrue -> TyBool

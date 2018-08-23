@@ -54,3 +54,7 @@ let x = ref 0 in (
 (lambda x: {a=Nat} . {a=x.a, c=10}) as ({a=Nat, b=Nat} -> {c=Nat})
 
 if true then {a=1} else {a=1, b=2}
+
+(<val=0>) as Top
+
+if true then 0 else true

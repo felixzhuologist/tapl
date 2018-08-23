@@ -5,6 +5,7 @@ let rec printty ty = match ty with
   | TyBool -> "Bool"
   | TyNat -> "Nat"
   | TyUnit -> "Unit"
+  | TyTop -> "TyTop"
   | TyRecord(tys) ->
       let printfield (label, fieldty) = label ^ "=" ^ (printty fieldty) in
       "{" ^ (String.concat ", " (List.map printfield tys)) ^ "}"

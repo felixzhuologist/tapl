@@ -50,6 +50,7 @@ open Context
 %token BANG
 %token ASSIGN
 %token TYREF
+%token TYTOP
 
 %start toplevel
 %type <Context.context -> Syntax.term> toplevel
@@ -209,4 +210,5 @@ AType:
   | LT TypeFieldsColon GT      { TyVariant($2) }
   | TYUNIT                     { TyUnit }
   | TYBOOL                     { TyBool }
-  | TYNAT                      { TyNat } ;
+  | TYNAT                      { TyNat }
+  | TYTOP                      { TyTop } ;

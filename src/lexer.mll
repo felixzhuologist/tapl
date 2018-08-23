@@ -20,6 +20,8 @@ rule read =
   | "Nat"    { TYNAT }
   | "Unit"   { TYUNIT }
   | "Ref"    { TYREF }
+  | "Top"    { TYTOP }
+  | "Bot"    { TYBOT }
   | "λ"      { LAMBDA }
   | "->"     { ARROW }
   | "=>"     { FATARROW }

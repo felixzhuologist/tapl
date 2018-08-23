@@ -6,6 +6,7 @@ type ty =
   | TyVariant of (string * ty) list
   | TyArr of ty * ty
   | TyRef of ty
+  | TyTop
 
 type term = 
   | TmVar of int * int
