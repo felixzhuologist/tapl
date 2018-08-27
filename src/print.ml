@@ -1,19 +1,27 @@
 open Syntax
 open Context
 
-let rec printty ty = match ty with
+let rec printty ctx ty = match ty with
   | TyBool -> "Bool"
   | TyNat -> "Nat"
   | TyUnit -> "Unit"
   | TyTop -> "TyTop"
   | TyRecord(tys) ->
-      let printfield (label, fieldty) = label ^ "=" ^ (printty fieldty) in
+      let printfield (label, fieldty) = label ^ "=" ^ (printty ctx fieldty) in
       "{" ^ (String.concat ", " (List.map printfield tys)) ^ "}"
-  | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2
+  | TyArr(ty1, ty2) -> printty ctx ty1 ^ " -> " ^ printty ctx ty2
   | TyVariant(tys) ->
-      let printfield (label, fieldty) = label ^ ": " ^ (printty fieldty) in
+      let printfield (label, fieldty) = label ^ ": " ^ (printty ctx fieldty) in
       "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
-  | TyRef(ty) -> "Ref " ^ printty ty
+  | TyRef(ty) -> "Ref " ^ printty ctx ty
+  | TyRec(x, ty) ->
+      let ctx', x' = pickfreshname ctx x in
+      ("μ" ^ x' ^ "." ^ printty ctx' ty)
+  | TyVar(i, n) ->
+      if ctxlength ctx = n then
+        let (n, _) = getbinding ctx i in n
+      else
+        "bad index"
 
 let rec printtm (ctx: context) (t: term) = match t with
   | TmVar(i, n) ->
@@ -50,7 +58,7 @@ let rec printtm (ctx: context) (t: term) = match t with
       let fs = List.map printfield fields in
       "{" ^ (String.concat "," fs) ^ "}"
   | TmProj(t, l) -> printtm ctx t ^ "." ^ l
-  | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ty
+  | TmAscribe(t, ty) -> printtm ctx t ^ " as " ^ printty ctx ty
   | TmTag(s, t) -> "<" ^ s ^ "=" ^ printtm ctx t ^ ">"
   | TmFix(t) -> "fix " ^ printtm ctx t
   | TmRef(t) -> "ref " ^ printtm ctx t
