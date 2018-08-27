@@ -169,21 +169,22 @@ Field:
 (* type fields separated by = *)
 TypeFieldsEq:
   | /* empty */
-    { fun _ -> [] }
-  | NETypeFieldsEq { fun ctx -> $1 ctx } ;
+    { fun _ _ -> [] }
+  | NETypeFieldsEq { $1 } ;
 
 NETypeFieldsEq:
-  | TypeFieldEq { fun ctx -> [$1 ctx] } 
+  | TypeFieldEq { fun ctx i -> [$1 ctx i] } 
   | TypeFieldEq COMMA NETypeFieldsEq
-      { fun ctx ->
-          let (new_label, ty) = $1 ctx in
-          let existing_fields = $3 ctx in
+      { fun ctx i ->
+          let (new_label, ty) = ($1 ctx i) in
+          let existing_fields = ($3 ctx (i+1)) in
           if List.mem_assoc new_label existing_fields then
           existing_fields else
           (new_label, ty) :: existing_fields } ;
 
 TypeFieldEq:
-  | IDENT EQ Type { fun ctx -> ($1, $3 ctx) } ;
+  | IDENT EQ Type { fun ctx _ -> ($1, $3 ctx) }
+  | Type          { fun ctx i -> (string_of_int i, $1 ctx) } ;
 
 (* type fields separated by : *)
 TypeFieldsColon:
@@ -215,7 +216,7 @@ Type:
 
 AType:
   | LPAREN Type RPAREN         { fun ctx -> $2 ctx }
-  | LCURLY TypeFieldsEq RCURLY { fun ctx -> TyRecord($2 ctx) }
+  | LCURLY TypeFieldsEq RCURLY { fun ctx -> TyRecord($2 ctx 1) }
   | LT TypeFieldsColon GT      { fun ctx -> TyVariant($2 ctx) }
   | TYIDENT                    { fun ctx -> TyVar(name2index ctx $1, ctxlength ctx)}
   | TYUNIT                     { fun _ -> TyUnit }
