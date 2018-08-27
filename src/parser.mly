@@ -54,6 +54,10 @@ open Context
 
 %token MU
 %token <string> TYIDENT
+%token LSQUARE
+%token RSQUARE
+%token FOLD
+%token UNFOLD
 
 %start toplevel
 %type <Context.context -> Syntax.term> toplevel
@@ -95,8 +99,12 @@ AppTerm:
   | ISZERO PathTerm         { fun ctx -> TmIsZero($2 ctx) }
   | FIX PathTerm            { fun ctx -> TmFix($2 ctx) }
   | REF PathTerm            { fun ctx -> TmRef($2 ctx) }
-  | BANG PathTerm           { fun ctx -> TmDeref($2 ctx) } ;
+  | BANG PathTerm           { fun ctx -> TmDeref($2 ctx) } 
   | LT IDENT EQ PathTerm GT { fun ctx -> TmTag($2, $4 ctx) }
+  | FOLD LSQUARE Type RSQUARE PathTerm
+      { fun ctx -> TmFold($3 ctx, $5 ctx) }
+  | UNFOLD LSQUARE Type RSQUARE PathTerm
+      { fun ctx -> TmUnfold($3 ctx, $5 ctx) } ;
 
 PathTerm:
   | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}

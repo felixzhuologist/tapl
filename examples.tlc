@@ -12,7 +12,9 @@ let x = {1, true, 3} in x.2
 
 (<none=unit>) as <none: Unit, some: Nat>
 
-case <some=3> of <none=x> => 0 | <some=x> => x
+case <some=3> of
+    <none=x> => 0
+  | <some=x> => x
 
 let ff = λie: Nat -> Bool .
   λx: Nat .
@@ -60,3 +62,7 @@ if true then {a=1} else {a=1, b=2}
 (<val=0>) as Top
 
 if true then 0 else true
+
+fold
+  [mu X . <nil: Unit, cons: {Nat, X}>]
+  (<nil=unit>) as <nil: Unit, cons: {Nat, mu X . <nil: Unit, cons: {Nat, X}>}>

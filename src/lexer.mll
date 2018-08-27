@@ -35,6 +35,8 @@ rule read =
   | ")"      { RPAREN }
   | "{"      { LCURLY }
   | "}"      { RCURLY }
+  | "["      { LSQUARE }
+  | "]"      { RSQUARE }
   | "<"      { LT }
   | ">"      { GT }
   | ":"      { COLON }
@@ -58,6 +60,8 @@ rule read =
   | "of"     { OF }
   | "fix"    { FIX }
   | "ref"    { REF }
+  | "fold"   { FOLD }
+  | "unfold" { UNFOLD }
   | tyident  { TYIDENT (Lexing.lexeme lexbuf) } 
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
