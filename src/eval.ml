@@ -13,11 +13,12 @@ let rec isval t = match t with
   | t when isnumericval t -> true
   | TmAbs(_, _, _) -> true
   | TmRecord(fields) -> List.for_all isval (List.map (fun (_, f) -> f) fields)
-  | TmAscribe(t, _) -> isval t
   | TmTag(_, t) -> isval t
   | TmLoc(_) -> true
+  | TmApp(TmFold(_), v) -> isval v
   | _ -> false
 
+(* TODO: refactor shared code *)
 let termShift d t =
   let rec walk c t = match t with
     | TmTrue -> TmTrue
@@ -37,13 +38,15 @@ let termShift d t =
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
     | TmTag(s, t) -> TmTag(s, walk c t)
     | TmCase(t, cases) ->
-        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
+        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk (c+1) t))) cases in
         TmCase(walk c t, cases')
     | TmFix(t) -> TmFix(walk c t)
     | TmRef(t) -> TmRef(walk c t)
     | TmLoc(_) as t -> t
     | TmDeref(t) -> TmDeref(walk c t)
     | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
+    | TmFold(_) as t -> t
+    | TmUnfold(_) as t -> t
   in walk 0 t
 
 (* [ j -> s ]t *)
@@ -66,13 +69,15 @@ let termSubst j s t =
     | TmAscribe(t, ty) -> TmAscribe(walk c t, ty)
     | TmTag(s, t) -> TmTag(s, walk c t)
     | TmCase(t, cases) ->
-        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk c t))) cases in
+        let cases' = List.map (fun (x, (y, t)) -> (x, (y, walk (c+1) t))) cases in
         TmCase(walk c t, cases')
     | TmFix(t) -> TmFix(walk c t)
     | TmRef(t) -> TmRef(walk c t)
     | TmLoc(_) as t -> t
     | TmDeref(t) -> TmDeref(walk c t)
     | TmAssign(t1, t2) -> TmAssign(walk c t1, walk c t2)
+    | TmFold(_) as t -> t
+    | TmUnfold(_) as t -> t
   in walk 0 t
 
 let termSubstTop s t = termShift (-1) (termSubst 0 (termShift 1 s) t)
@@ -94,6 +99,9 @@ let rec evalStep ctx store t = match t with
   | TmIsZero(TmSucc(nv1)) when (isnumericval nv1) -> TmFalse, store
   | TmIsZero(t1) ->
       let (t1', store') = evalStep ctx store t1 in TmIsZero(t1'), store'
+  | TmApp(TmUnfold(_), TmApp(TmFold(_), v)) when isval v -> v, store
+  | TmApp(TmFold(_) as t1, t2) | TmApp(TmUnfold(_) as t1, t2) when not (isval t2) ->
+      let (t2', store') = evalStep ctx store t2 in TmApp(t1, t2'), store'
   | TmApp(TmAbs(_, _, t), v2) when isval v2 -> termSubstTop v2 t, store
   | TmApp(v1, t2) when isval v1 ->
       let (t2', store') = evalStep ctx store t2 in TmApp(v1, t2'), store'

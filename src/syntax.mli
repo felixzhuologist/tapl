@@ -33,5 +33,5 @@ type term =
   | TmLoc of int
   | TmDeref of term
   | TmAssign of term * term
-  | TmFold of ty * term
-  | TmUnfold of ty * term
+  | TmFold of ty
+  | TmUnfold of ty

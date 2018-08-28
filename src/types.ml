@@ -3,6 +3,38 @@ open Syntax
 
 exception TypeError
 
+(* TODO: refactor shared code *)
+let tyShift d t =
+  let rec walk c t = match t with
+    | TyBool -> TyBool
+    | TyNat -> TyNat
+    | TyUnit -> TyUnit
+    | TyTop -> TyTop
+    | TyRecord(fields) -> TyRecord(List.map (fun (l, t) -> (l, walk c t)) fields)
+    | TyVariant(fields) -> TyVariant(List.map (fun (l, t) -> (l, walk c t)) fields)
+    | TyArr(ty1, ty2) -> TyArr(walk c ty1, walk c ty2)
+    | TyRef(ty) -> TyRef(walk c ty)
+    | TyRec(s, ty) -> TyRec(s, walk c ty)
+    | TyVar(x, n) -> if x >= c then TyVar(x + d, n + d) else TyVar(x, n + d)
+  in walk 0 t
+
+(* [ j -> s ]t *)
+let tySubst j s t =
+  let rec walk c t = match t with
+    | TyBool -> TyBool
+    | TyNat -> TyNat
+    | TyUnit -> TyUnit
+    | TyTop -> TyTop
+    | TyRecord(fields) -> TyRecord(List.map (fun (l, t) -> (l, walk c t)) fields)
+    | TyVariant(fields) -> TyVariant(List.map (fun (l, t) -> (l, walk c t)) fields)
+    | TyArr(ty1, ty2) -> TyArr(walk c ty1, walk c ty2)
+    | TyRef(ty) -> TyRef(walk c ty)
+    | TyRec(s, ty) -> TyRec(s, walk c ty)
+    | TyVar(x, n) -> if x = j + c then tyShift c s else TyVar(x, n)
+  in walk 0 t
+
+let tySubstTop s t = tyShift (-1) (tySubst 0 (tyShift 1 s) t)
+
 let rec (<:) ty1 ty2 =
   (=) ty1 ty2 ||
   match (ty1, ty2) with
@@ -22,6 +54,8 @@ let rec (<:) ty1 ty2 =
           with Not_found -> false
         in
         List.for_all depthsub fields1
+    | (TyRec(_, ty1), TyRec(_, ty2)) -> ty1 <: ty2
+    | (TyVar(x1, _), TyVar(x2, _)) -> x1 = x2
     | (_, TyTop) -> true
     | _ -> false
 
@@ -95,5 +129,13 @@ let rec typeof (ctx: context) (t: term) = match t with
   | TmDeref(t) ->
       (match typeof ctx t with
         | TyRef(ty) -> ty
+        | _ -> raise TypeError)
+  | TmFold(ty) ->
+      (match ty with
+        | TyRec(_, body) -> TyArr(tySubstTop ty body, ty)
+        | _ -> raise TypeError)
+  | TmUnfold(ty) ->
+      (match ty with
+        | TyRec(_, body) -> TyArr(ty, tySubstTop ty body)
         | _ -> raise TypeError)
   | _ -> raise TypeError

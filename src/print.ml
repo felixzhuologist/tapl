@@ -17,11 +17,12 @@ let rec printty ctx ty = match ty with
   | TyRec(x, ty) ->
       let ctx', x' = pickfreshname ctx x in
       ("μ" ^ x' ^ "." ^ printty ctx' ty)
-  | TyVar(i, n) ->
-      if ctxlength ctx = n then
+  | TyVar(i, n) -> let (n, _) = getbinding ctx i in n
+(*       if ctxlength ctx = n then
         let (n, _) = getbinding ctx i in n
       else
-        "bad index"
+        "expected context of size " ^ string_of_int n ^
+        " but got " ^ string_of_int (ctxlength ctx) *)
 
 let rec printtm (ctx: context) (t: term) = match t with
   | TmVar(i, n) ->
@@ -65,4 +66,7 @@ let rec printtm (ctx: context) (t: term) = match t with
   | TmDeref(t) -> "!" ^ printtm ctx t
   | TmAssign(t1, t2) -> printtm ctx t1 ^ " := " ^ printtm ctx t2
   | TmLoc(i) -> "<loc #" ^ string_of_int i ^ ">"
+  | TmFold(ty) -> "fold " ^ "[" ^ printty ctx ty ^ "]"
+  | TmUnfold(ty) -> "unfold " ^ "[" ^ printty ctx ty ^ "]"
+  | TmCase(t, cases) -> "case " ^ printtm ctx t ^ " of " ^ (String.concat " | " (List.map (fun (c, (v, t)) -> "<" ^ c ^ "=" ^ "v" ^ ">" ^ " => " ^ (printtm (addbinding ctx v NameBind) t)) cases))
   | _ -> "TODO"

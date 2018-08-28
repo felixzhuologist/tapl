@@ -101,10 +101,10 @@ AppTerm:
   | REF PathTerm            { fun ctx -> TmRef($2 ctx) }
   | BANG PathTerm           { fun ctx -> TmDeref($2 ctx) } 
   | LT IDENT EQ PathTerm GT { fun ctx -> TmTag($2, $4 ctx) }
-  | FOLD LSQUARE Type RSQUARE PathTerm
-      { fun ctx -> TmFold($3 ctx, $5 ctx) }
-  | UNFOLD LSQUARE Type RSQUARE PathTerm
-      { fun ctx -> TmUnfold($3 ctx, $5 ctx) } ;
+  | FOLD LSQUARE Type RSQUARE
+      { fun ctx -> TmFold($3 ctx) }
+  | UNFOLD LSQUARE Type RSQUARE
+      { fun ctx -> TmUnfold($3 ctx) } ;
 
 PathTerm:
   | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
