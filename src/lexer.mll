@@ -7,7 +7,9 @@ exception SyntaxError of string
 
 let white = [' ' '\t' '\n']+
 
-let ident = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
+let ident = ['a'-'z' '_']['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
+
+let tyident = ['A'-'Z']['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
 
 let intv = ['0'-'9']+
 
@@ -15,6 +17,7 @@ rule read =
   parse
   | white    { read lexbuf }
   | "unit"   { UNIT }
+  | "mu"     { MU }
   | "lambda" { LAMBDA }
   | "Bool"   { TYBOOL }
   | "Nat"    { TYNAT }
@@ -22,6 +25,7 @@ rule read =
   | "Ref"    { TYREF }
   | "Top"    { TYTOP }
   | "λ"      { LAMBDA }
+  | "μ"      { MU }
   | "->"     { ARROW }
   | "=>"     { FATARROW }
   | "|"      { VBAR }
@@ -31,6 +35,8 @@ rule read =
   | ")"      { RPAREN }
   | "{"      { LCURLY }
   | "}"      { RCURLY }
+  | "["      { LSQUARE }
+  | "]"      { RSQUARE }
   | "<"      { LT }
   | ">"      { GT }
   | ":"      { COLON }
@@ -54,6 +60,9 @@ rule read =
   | "of"     { OF }
   | "fix"    { FIX }
   | "ref"    { REF }
+  | "fold"   { FOLD }
+  | "unfold" { UNFOLD }
+  | tyident  { TYIDENT (Lexing.lexeme lexbuf) } 
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }

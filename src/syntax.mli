@@ -7,6 +7,8 @@ type ty =
   | TyArr of ty * ty
   | TyRef of ty
   | TyTop
+  | TyRec of string * ty
+  | TyVar of int * int
 
 type term = 
   | TmVar of int * int
@@ -31,3 +33,5 @@ type term =
   | TmLoc of int
   | TmDeref of term
   | TmAssign of term * term
+  | TmFold of ty
+  | TmUnfold of ty

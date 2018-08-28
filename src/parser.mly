@@ -52,6 +52,13 @@ open Context
 %token TYREF
 %token TYTOP
 
+%token MU
+%token <string> TYIDENT
+%token LSQUARE
+%token RSQUARE
+%token FOLD
+%token UNFOLD
+
 %start toplevel
 %type <Context.context -> Syntax.term> toplevel
 
@@ -67,7 +74,7 @@ term:
   | LAMBDA IDENT COLON Type DOT term 
     { fun ctx ->
         let ctx1 = addbinding ctx $2 NameBind in
-        TmAbs($2, $4, $6 ctx1) }
+        TmAbs($2, $4 ctx1, $6 ctx1) }
   | IF term THEN term ELSE term
     { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) }
   | LET IDENT EQ term IN term
@@ -77,7 +84,7 @@ term:
   | LETREC IDENT COLON Type EQ term IN term
     { fun ctx ->
         let ctx1 = addbinding ctx $2 NameBind in
-        let recfunc = TmFix(TmAbs($2, $4, $6 ctx1)) in
+        let recfunc = TmFix(TmAbs($2, $4 ctx1, $6 ctx1)) in
         TmLet($2, recfunc, $8 ctx1) }
   | CASE term OF Cases
         { fun ctx -> TmCase($2 ctx, $4 ctx) }
@@ -92,8 +99,12 @@ AppTerm:
   | ISZERO PathTerm         { fun ctx -> TmIsZero($2 ctx) }
   | FIX PathTerm            { fun ctx -> TmFix($2 ctx) }
   | REF PathTerm            { fun ctx -> TmRef($2 ctx) }
-  | BANG PathTerm           { fun ctx -> TmDeref($2 ctx) } ;
+  | BANG PathTerm           { fun ctx -> TmDeref($2 ctx) } 
   | LT IDENT EQ PathTerm GT { fun ctx -> TmTag($2, $4 ctx) }
+  | FOLD LSQUARE Type RSQUARE
+      { fun ctx -> TmFold($3 ctx) }
+  | UNFOLD LSQUARE Type RSQUARE
+      { fun ctx -> TmUnfold($3 ctx) } ;
 
 PathTerm:
   | PathTerm DOT INTV  { fun ctx -> TmProj($1 ctx, string_of_int $3)}
@@ -101,7 +112,7 @@ PathTerm:
   | AscribeTerm        { $1 } ;
 
 AscribeTerm:
-  | ATerm AS Type               { fun ctx -> TmAscribe($1 ctx, $3) }
+  | ATerm AS Type               { fun ctx -> TmAscribe($1 ctx, $3 ctx) }
   | ATerm                       { $1 } ;
 
 TermSeq:
@@ -166,49 +177,57 @@ Field:
 (* type fields separated by = *)
 TypeFieldsEq:
   | /* empty */
-    { [] }
+    { fun _ _ -> [] }
   | NETypeFieldsEq { $1 } ;
 
 NETypeFieldsEq:
-  | TypeFieldEq { [$1] } 
+  | TypeFieldEq { fun ctx i -> [$1 ctx i] } 
   | TypeFieldEq COMMA NETypeFieldsEq
-      { let (new_label, ty) = $1 in
-        let existing_fields = $3 in
-        if List.mem_assoc new_label existing_fields then
-        existing_fields else
-        (new_label, ty) :: existing_fields } ;  
+      { fun ctx i ->
+          let (new_label, ty) = ($1 ctx i) in
+          let existing_fields = ($3 ctx (i+1)) in
+          if List.mem_assoc new_label existing_fields then
+          existing_fields else
+          (new_label, ty) :: existing_fields } ;
 
 TypeFieldEq:
-  | IDENT EQ Type { ($1, $3) } ;
+  | IDENT EQ Type { fun ctx _ -> ($1, $3 ctx) }
+  | Type          { fun ctx i -> (string_of_int i, $1 ctx) } ;
 
 (* type fields separated by : *)
 TypeFieldsColon:
   | /* empty */
-    { [] }
-  | NETypeFieldsColon { $1 } ;
+    { fun _ -> [] }
+  | NETypeFieldsColon { fun ctx -> $1 ctx } ;
 
 NETypeFieldsColon:
-  | TypeFieldColon { [$1] } 
+  | TypeFieldColon { fun ctx -> [$1 ctx] } 
   | TypeFieldColon COMMA NETypeFieldsColon
-      { let (new_label, ty) = $1 in
-        let existing_fields = $3 in
-        if List.mem_assoc new_label existing_fields then
-        existing_fields else
-        (new_label, ty) :: existing_fields } ;  
+      { fun ctx ->
+          let (new_label, ty) = $1 ctx in
+          let existing_fields = $3 ctx in
+          if List.mem_assoc new_label existing_fields then
+          existing_fields else
+          (new_label, ty) :: existing_fields } ;  
 
 TypeFieldColon:
-  | IDENT COLON Type { ($1, $3) } ;
+  | IDENT COLON Type { fun ctx -> ($1, $3 ctx) } ;
 
 Type:
-  | AType            { $1 }
-  | TYREF AType      { TyRef($2) }
-  | AType ARROW Type { TyArr($1, $3) } ;
+  | AType            { fun ctx -> $1 ctx }
+  | TYREF AType      { fun ctx -> TyRef($2 ctx) }
+  | AType ARROW Type { fun ctx -> TyArr($1 ctx, $3 ctx) }
+  | MU TYIDENT DOT Type
+      { fun ctx ->
+          let ctx1 = addbinding ctx $2 NameBind in
+          TyRec($2, $4 ctx1) } ;
 
 AType:
-  | LPAREN Type RPAREN         { $2 }
-  | LCURLY TypeFieldsEq RCURLY { TyRecord($2) }
-  | LT TypeFieldsColon GT      { TyVariant($2) }
-  | TYUNIT                     { TyUnit }
-  | TYBOOL                     { TyBool }
-  | TYNAT                      { TyNat }
-  | TYTOP                      { TyTop } ;
+  | LPAREN Type RPAREN         { fun ctx -> $2 ctx }
+  | LCURLY TypeFieldsEq RCURLY { fun ctx -> TyRecord($2 ctx 1) }
+  | LT TypeFieldsColon GT      { fun ctx -> TyVariant($2 ctx) }
+  | TYIDENT                    { fun ctx -> TyVar(name2index ctx $1, ctxlength ctx)}
+  | TYUNIT                     { fun _ -> TyUnit }
+  | TYBOOL                     { fun _ -> TyBool }
+  | TYNAT                      { fun _ -> TyNat }
+  | TYTOP                      { fun _ -> TyTop } ;

@@ -28,7 +28,7 @@ let process_term s =
     let ast = (Parser.toplevel Lexer.read lexbuf) emptycontext in
     let (result, _) = Eval.eval emptycontext emptystore ast in
     let ty = Types.typeof emptycontext ast in
-    print_endline ((printtm emptycontext result) ^ " : " ^ (printty ty))
+    print_endline ((printtm emptycontext result) ^ " : " ^ (printty emptycontext ty))
   with
     | SyntaxError msg -> prerr_endline msg
     | Parser.Error -> prerr_endline "Parsing error"
