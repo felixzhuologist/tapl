@@ -52,6 +52,8 @@ open Context
 %token TYREF
 %token TYTOP
 
+%token <string> TYIDENT
+
 %start toplevel
 %type <Context.context -> Syntax.term> toplevel
 
@@ -211,4 +213,5 @@ AType:
   | TYUNIT                     { TyUnit }
   | TYBOOL                     { TyBool }
   | TYNAT                      { TyNat }
-  | TYTOP                      { TyTop } ;
+  | TYTOP                      { TyTop }
+  | TYIDENT                    { TyId($1) } ;

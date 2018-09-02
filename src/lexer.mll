@@ -9,6 +9,8 @@ let white = [' ' '\t' '\n']+
 
 let ident = ['A'-'Z' 'a'-'z' '_']['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
 
+let tyident = ['A'-'Z']['A'-'Z' 'a'-'z' '_' '0'-'9' '\'']*
+
 let intv = ['0'-'9']+
 
 rule read =
@@ -54,6 +56,7 @@ rule read =
   | "of"     { OF }
   | "fix"    { FIX }
   | "ref"    { REF }
+  | tyident  { TYIDENT (Lexing.lexeme lexbuf) }
   | ident    { IDENT (Lexing.lexeme lexbuf) }
   | intv     { INTV (int_of_string (Lexing.lexeme lexbuf)) }
   | _        { raise (SyntaxError ("Unexpected char: " ^ Lexing.lexeme lexbuf)) }

@@ -14,6 +14,7 @@ let rec printty ty = match ty with
       let printfield (label, fieldty) = label ^ ": " ^ (printty fieldty) in
       "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
   | TyRef(ty) -> "Ref " ^ printty ty
+  | TyId(v) -> v
 
 let rec printtm (ctx: context) (t: term) = match t with
   | TmVar(i, n) ->
