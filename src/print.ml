@@ -15,6 +15,7 @@ let rec printty ty = match ty with
       "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
   | TyRef(ty) -> "Ref " ^ printty ty
   | TyId(v) -> v
+  | TyVar(i) -> "?X" ^ string_of_int i
 
 let rec printtm (ctx: context) (t: term) = match t with
   | TmVar(i, n) ->

@@ -8,6 +8,7 @@ type ty =
   | TyRef of ty
   | TyTop
   | TyId of string
+  | TyVar of int
 
 type term = 
   | TmVar of int * int
