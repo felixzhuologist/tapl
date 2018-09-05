@@ -87,12 +87,12 @@ let rec unify (constr: constr) : tymap = match constr with
   | [] -> []
   | (TyId(s), TyId(s'))::rest when s = s' -> unify rest
   | (ty1, TyId(s))::rest ->
-      if occursin s ty1 then []
+      if occursin s ty1 then raise TypeError
       else List.append
         (unify (sub_into_constr s ty1 rest))
         [(s, ty1)]
   | (TyId(s), ty2)::rest ->
-      if occursin s ty2 then []
+      if occursin s ty2 then raise TypeError
       else List.append
         (unify (sub_into_constr s ty2 rest))
         [(s, ty2)]
