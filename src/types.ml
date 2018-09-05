@@ -32,11 +32,11 @@ let join ty1 ty2 =
   TyTop
 
 type constr = (ty * ty) list
-type tymap = (int * ty) list
+type tymap = (string * ty) list
 
-let occursin (i: int) (ty: ty) : bool =
+let occursin (s: string) (ty: ty) : bool =
   let rec o ty = match ty with
-    | TyVar(j) -> i = j
+    | TyId(s') -> s = s'
     | TyNat -> false
     | TyBool -> false
     | TyUnit -> false
@@ -44,16 +44,15 @@ let occursin (i: int) (ty: ty) : bool =
     | TyArr(ty1, ty2) -> o ty1 || o ty2
     | TyRef(ty1) -> o ty1
     | TyRecord(fields) ->
-        List.fold_left (||) false (List.map (fun (l, t) -> o t) fields)
+        List.fold_left (||) false (List.map (fun (_, t) -> o t) fields)
     | TyVariant(fields) ->
-        List.fold_left (||) false (List.map (fun (l, t) -> o t) fields)
-    | TyId(s) -> raise TypeError (* TODO: remove TyIds *)
+        List.fold_left (||) false (List.map (fun (_, t) -> o t) fields)
   in o ty
 
 (* subst ?Xi = T, into S *)
-let sub_into_ty (i: int) (tyT: ty) (tyS: ty) : ty =
+let sub_into_ty (s: string) (tyT: ty) (tyS: ty) : ty =
   let rec f tyS = match tyS with
-    | TyVar(j) -> if i = j then tyT else TyVar(j)
+    | TyId(s') -> if s = s' then tyT else TyId(s')
     | TyNat -> TyNat
     | TyBool -> TyBool
     | TyUnit -> TyUnit
@@ -62,41 +61,50 @@ let sub_into_ty (i: int) (tyT: ty) (tyS: ty) : ty =
     | TyRef(ty1) -> f ty1
     | TyRecord(fields) -> TyRecord(List.map (fun (l, t) -> (l, f t)) fields)
     | TyVariant(fields) -> TyVariant(List.map (fun (l, t) -> (l, f t)) fields)
-    | TyId(s) -> raise TypeError (* TODO: remove TyIds *)
   in f tyS
 
-let sub_into_constr (i: int) (ty: ty) (constr: constr) : constr =
+let sub_into_constr (s: string) (ty: ty) (constr: constr) : constr =
   List.map
-    (fun (ty1, ty2) -> (sub_into_ty i ty ty1, sub_into_ty i ty ty2))
+    (fun (ty1, ty2) -> (sub_into_ty s ty ty1, sub_into_ty s ty ty2))
     constr
 
-let pickfreshty (constr: constr) : int =
-  let (flattened: ty list) = List.fold_left (fun l (x, y) -> x::y::l) [] constr in
-  let get_max (num: int) (ty: ty): int = (match ty with
-    | TyVar(i) -> max num i
-    | _ -> num) in
-  let max_used_ty = (List.fold_left get_max (-1) flattened) in
-  max_used_ty + 1
+(* try picking ?X0 as the new name. If that's bound, try ?X1, then ?X2, and so on...
+ * searches through all constraints for each new name which can be made more efficient *)
+let pickfreshty (constr: constr): string =
+  let istynamebound (s: string) (constr: constr) : bool =
+    List.fold_left
+      (fun acc (l, r) -> acc || (occursin s l) || (occursin s r))
+      false constr
+  in 
+  let rec pick (i: int) : string =
+    let name = "?X" ^ string_of_int i in
+    if istynamebound name constr then pick (i+1) else name
+  in
+  pick 0
 
 let rec unify (constr: constr) : tymap = match constr with
   | [] -> []
-  | (TyVar(i), TyVar(j))::rest when i = j -> unify rest
-  | (ty1, TyVar(i))::rest ->
-      if occursin i ty1 then []
-      else (i, ty1)::(unify (sub_into_constr i ty1 rest))
-  | (TyVar(i), ty2)::rest ->
-      if occursin i ty2 then []
-      else (i, ty2)::(unify (sub_into_constr i ty2 rest))
+  | (TyId(s), TyId(s'))::rest when s = s' -> unify rest
+  | (ty1, TyId(s))::rest ->
+      if occursin s ty1 then []
+      else List.append
+        (unify (sub_into_constr s ty1 rest))
+        [(s, ty1)]
+  | (TyId(s), ty2)::rest ->
+      if occursin s ty2 then []
+      else List.append
+        (unify (sub_into_constr s ty2 rest))
+        [(s, ty2)]
   | (TyArr(ty11, ty12), TyArr(ty21, ty22))::rest ->
       unify ((ty11, ty21)::(ty12, ty22)::rest)
   | (ty1, ty2)::rest ->
       if ty1 <: ty2 || ty2 <: ty1 then unify rest
       else raise TypeError
 
-let rec applysubst (sigma: tymap) (ty: ty) : ty =
+let applysubst (sigma: tymap) (ty: ty) : ty =
     List.fold_left
       (fun ty (i, tyval) -> sub_into_ty i tyval ty)
-      ty sigma
+      ty (List.rev sigma)
 
 let rec typeof_non_poly (ctx: context) (t: term) : ty = match t with
   | TmTrue -> TyBool
@@ -194,7 +202,7 @@ let rec get_constr (ctx: context) (t: term) : (ty * constr) = match t with
       let (ty2, constr2) = get_constr ctx t2 in
       let constr' = constr1 @ constr2 in
       let x = pickfreshty constr' in
-      (TyVar(x), (ty1, TyArr(ty2, TyVar(x)))::constr')
+      (TyId(x), (ty1, TyArr(ty2, TyId(x)))::constr')
   | TmLet(x, t1, t2) ->
       let (ty1, constr1) = get_constr ctx t1 in
       let ctx' = addbinding ctx x (VarBind(ty1)) in
