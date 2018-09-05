@@ -1,5 +1,6 @@
 open Context
 open Syntax
+open Print
 
 exception TypeError
 
@@ -118,7 +119,7 @@ let rec typeof_non_poly (ctx: context) (t: term) : ty = match t with
       let ty2 = typeof_non_poly ctx t2 in
       let ty3 = typeof_non_poly ctx t3 in
       if (=) (typeof_non_poly ctx t1) TyBool then join ty2 ty3 else (raise TypeError)
-  | TmVar(i, _) -> (match getbinding ctx i with
+  | TmVar(i) -> (match getbinding ctx i with
       | (_, NameBind) -> raise TypeError
       | (_, VarBind(ty)) -> ty)
   | TmAbs(x, ty1, t) ->
@@ -190,7 +191,7 @@ let rec get_constr (ctx: context) (t: term) : (ty * constr) = match t with
       let (ty3, constr3) = get_constr ctx t3 in
       let newconstr = [(ty1, TyBool)] in
       (join ty2 ty3, List.concat [newconstr; constr1; constr2; constr3])
-  | TmVar(i, _) -> (match getbinding ctx i with
+  | TmVar(i) -> (match getbinding ctx i with
       | (_, NameBind) -> raise TypeError
       | (_, VarBind(ty)) -> (ty, []))
   | TmAbs(x, ty1, t) ->

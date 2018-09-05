@@ -10,7 +10,7 @@ type ty =
   | TyId of string
 
 type term = 
-  | TmVar of int * int
+  | TmVar of int
   | TmAbs of string * ty * term
   | TmApp of term * term
   | TmTrue

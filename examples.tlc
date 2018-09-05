@@ -64,3 +64,7 @@ if true then 0 else true
 λz: Z -> Z .
   λy: Y -> Y .
     z (y true)
+
+λx . x
+
+λz . (λy . z (y true))

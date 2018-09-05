@@ -19,11 +19,7 @@ let rec printty ty = match ty with
   | TyId(s) -> s
 
 let rec printtm (ctx: context) (t: term) = match t with
-  | TmVar(i, n) ->
-      if ctxlength ctx = n then
-        let (n, _) = getbinding ctx i in n
-      else
-        "bad index"
+  | TmVar(i) -> let (n, _) = getbinding ctx i in n
   | TmAbs(x, _, t) ->
       let ctx', x' = pickfreshname ctx x in
       ("λ" ^ x' ^ "." ^ printtm ctx' t)
