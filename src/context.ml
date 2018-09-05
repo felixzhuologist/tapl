@@ -19,7 +19,7 @@ let rec isnamebound ctx name =
 
 let rec pickfreshname ctx x =
   if isnamebound ctx x then pickfreshname ctx (x^"'")
-  else ((x,NameBind)::ctx), x
+  else (ctx@[(x,NameBind)]), x
 
 let getbinding ctx x =
   try

@@ -9,18 +9,17 @@ let rec printty ty = match ty with
   | TyRecord(tys) ->
       let printfield (label, fieldty) = label ^ "=" ^ (printty fieldty) in
       "{" ^ (String.concat ", " (List.map printfield tys)) ^ "}"
-  | TyArr(ty1, ty2) -> printty ty1 ^ " -> " ^ printty ty2
+  | TyArr(ty1, ty2) -> (match ty1 with
+      | TyArr(_, _) -> "(" ^ printty ty1 ^ ") -> " ^ printty ty2
+      | _ -> printty ty1 ^ " -> " ^ printty ty2)
   | TyVariant(tys) ->
       let printfield (label, fieldty) = label ^ ": " ^ (printty fieldty) in
       "<" ^ (String.concat ", " (List.map printfield tys)) ^ ">" 
   | TyRef(ty) -> "Ref " ^ printty ty
+  | TyId(s) -> s
 
 let rec printtm (ctx: context) (t: term) = match t with
-  | TmVar(i, n) ->
-      if ctxlength ctx = n then
-        let (n, _) = getbinding ctx i in n
-      else
-        "bad index"
+  | TmVar(i) -> let (n, _) = getbinding ctx i in n
   | TmAbs(x, _, t) ->
       let ctx', x' = pickfreshname ctx x in
       ("λ" ^ x' ^ "." ^ printtm ctx' t)

@@ -52,6 +52,8 @@ open Context
 %token TYREF
 %token TYTOP
 
+%token <string> TYIDENT
+
 %start toplevel
 %type <Context.context -> Syntax.term> toplevel
 
@@ -68,6 +70,12 @@ term:
     { fun ctx ->
         let ctx1 = addbinding ctx $2 NameBind in
         TmAbs($2, $4, $6 ctx1) }
+  | LAMBDA IDENT DOT term
+    { fun ctx ->
+        let (ctx1, tyname) = pickfreshname ctx "X" in
+        let arg_type = TyId(tyname) in
+        let ctx2 = addbinding ctx1 $2 (VarBind(arg_type)) in
+        TmAbs($2, arg_type, $4 ctx2) }
   | IF term THEN term ELSE term
     { fun ctx -> TmIf($2 ctx, $4 ctx, $6 ctx) }
   | LET IDENT EQ term IN term
@@ -117,7 +125,7 @@ TermSeq:
 ATerm:
   | LPAREN TermSeq RPAREN { $2 }
   | LCURLY Fields RCURLY  { fun ctx -> TmRecord($2 ctx 1) }
-  | IDENT                 { fun ctx -> TmVar(name2index ctx $1, ctxlength ctx) }
+  | IDENT                 { fun ctx -> TmVar(name2index ctx $1) }
   | INTV
     { let rec f n = match n with
           | 0 -> TmZero
@@ -211,4 +219,5 @@ AType:
   | TYUNIT                     { TyUnit }
   | TYBOOL                     { TyBool }
   | TYNAT                      { TyNat }
-  | TYTOP                      { TyTop } ;
+  | TYTOP                      { TyTop }
+  | TYIDENT                    { TyId($1) } ;

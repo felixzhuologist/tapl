@@ -58,3 +58,13 @@ if true then {a=1} else {a=1, b=2}
 (<val=0>) as Top
 
 if true then 0 else true
+
+λx: X . x
+
+λz: Z -> Z .
+  λy: Y -> Y .
+    z (y true)
+
+λx . x
+
+λz . (λy . z (y true))
